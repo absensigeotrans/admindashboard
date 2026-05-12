@@ -78,7 +78,8 @@
 ## 🚧 TAHAP 9: NEXT ACTION ITEMS (TO-DO)
 *(Silakan dilanjutkan oleh AI Agent berikutnya)*
 
-- [ ] **Biometric Login**: Implementasi Fingerprint/Face ID untuk login cepat via `local_auth`.
+- [x] **Biometric Login**: Implementasi Fingerprint/Face ID untuk login cepat via `local_auth`.
+- [x] **Pengecualian Geofence Driver**: Driver/Sopir bisa absensi di mana saja (bebas radius 100m).
 - [ ] **Pengingat Terjadwal**: Aktifkan fitur `scheduleCheckInReminder` di Settings UI.
 - [ ] **Dashboard Analytics**: Tambahkan grafik statistik bulanan di `StatisticsScreen`.
 

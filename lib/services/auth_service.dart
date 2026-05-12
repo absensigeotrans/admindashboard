@@ -20,7 +20,7 @@ class AuthService extends ChangeNotifier {
     
     // Listen for auth state changes
     _supabase.auth.onAuthStateChange.listen((data) {
-      _user = data.user;
+      _user = data.session?.user;
       if (_user != null) {
         _fetchProfile();
       } else {

@@ -182,6 +182,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final locationService = Provider.of<LocationService>(context);
     final syncService = Provider.of<SyncService>(context);
 
+    final role = authService.profile?['role'] ?? '';
+    final isDriver = role == 'driver';
+    final canAttend = (locationService.isInRadius || isDriver) && !locationService.isMocked;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('GeoAttend Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -359,13 +363,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: locationService.isInRadius ? Colors.green[100] : Colors.red[100],
+                              color: (locationService.isInRadius || isDriver) ? Colors.green[100] : Colors.red[100],
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              locationService.isInRadius ? 'Dalam Area' : 'Di Luar Area',
+                              isDriver 
+                                ? 'Bebas Area (Driver)' 
+                                : (locationService.isInRadius ? 'Dalam Area' : 'Di Luar Area'),
                               style: TextStyle(
-                                color: locationService.isInRadius ? Colors.green[800] : Colors.red[800],
+                                color: (locationService.isInRadius || isDriver) ? Colors.green[800] : Colors.red[800],
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -383,7 +389,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      onPressed: (_isProcessing || !locationService.isInRadius || locationService.isMocked)
+                      onPressed: (_isProcessing || !canAttend)
                           ? null
                           : _handleAttendance,
                       style: ElevatedButton.styleFrom(

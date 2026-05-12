@@ -4,10 +4,12 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 
-class NotificationService extends FlutterLocalNotificationsPlugin {
+class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
+
+  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
 
@@ -37,7 +39,7 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
       iOS: iosSettings,
     );
 
-    final result = await super.initialize(
+    final result = await _plugin.initialize(
       settings,
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
@@ -54,14 +56,10 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
 
   void _onNotificationTap(NotificationResponse response) {
     debugPrint('[NotificationService] Tapped: ${response.payload}');
-    // Handle navigation based on payload
-    // Can be handled via a global navigator key in main.dart
   }
 
   Future<void> _createAndroidChannels() async {
-    final androidPlugin = FlutterLocalNotificationsPlugin()
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(
@@ -103,14 +101,10 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
 
   Future<bool> requestPermissions() async {
     if (Platform.isAndroid) {
-      final androidPlugin = FlutterLocalNotificationsPlugin()
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       return await androidPlugin?.requestNotificationsPermission() ?? false;
     } else if (Platform.isIOS) {
-      final iosPlugin = FlutterLocalNotificationsPlugin()
-          .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>();
+      final iosPlugin = _plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
       return await iosPlugin?.requestPermissions(
         alert: true,
         badge: true,
@@ -243,40 +237,39 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
 
   // ─── Reminder Notifications ───
 
-  /// Jadwalkan pengingat check-in harian
   Future<void> scheduleCheckInReminder({
     required int hour,
     required int minute,
     required String shiftLabel,
   }) async {
-    // Cancel existing reminder first
     await cancelCheckInReminder();
 
     final now = DateTime.now();
     var scheduledDate = DateTime(now.year, now.month, now.day, hour, minute);
 
-    // If time already passed today, schedule for tomorrow
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
 
-    await zonedSchedule(
-      id: 4001,
-      title: '⏰ Pengingat Absensi',
-      body: 'Shift $shiftLabel dimulai! Jangan lupa check-in.',
-      scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
+    await _plugin.zonedSchedule(
+      4001,
+      '⏰ Pengingat Absensi',
+      'Shift $shiftLabel dimulai! Jangan lupa check-in.',
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(_channelReminder, 'Pengingat', importance: Importance.defaultImportance),
+        iOS: DarwinNotificationDetails(),
+      ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time, // Repeats daily
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
     );
-
-    debugPrint('[NotificationService] Check-in reminder scheduled: ${scheduledDate.hour}:${scheduledDate.minute}');
   }
 
   Future<void> cancelCheckInReminder() async {
-    await cancel(4001);
+    await _plugin.cancel(4001);
   }
 
-  /// Jadwalkan pengingat check-out harian
   Future<void> scheduleCheckOutReminder({
     required int hour,
     required int minute,
@@ -291,23 +284,25 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
 
-    await zonedSchedule(
-      id: 4002,
-      title: '⏰ Pengingat Check-Out',
-      body: 'Shift $shiftLabel hampir selesai. Jangan lupa check-out!',
-      scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
+    await _plugin.zonedSchedule(
+      4002,
+      '⏰ Pengingat Check-Out',
+      'Shift $shiftLabel hampir selesai. Jangan lupa check-out!',
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(_channelReminder, 'Pengingat', importance: Importance.defaultImportance),
+        iOS: DarwinNotificationDetails(),
+      ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
     );
-
-    debugPrint('[NotificationService] Check-out reminder scheduled: ${scheduledDate.hour}:${scheduledDate.minute}');
   }
 
   Future<void> cancelCheckOutReminder() async {
-    await cancel(4002);
+    await _plugin.cancel(4002);
   }
 
-  /// Jadwalkan pengingat cuti yang akan datang (1 hari sebelum)
   Future<void> scheduleLeaveReminder({
     required String leaveId,
     required DateTime startDate,
@@ -316,23 +311,28 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
     final reminderDate = startDate.subtract(const Duration(days: 1));
     final now = DateTime.now();
 
-    if (reminderDate.isBefore(now)) return; // Don't schedule if date passed
+    if (reminderDate.isBefore(now)) return;
 
     final scheduledDate = DateTime(
       reminderDate.year,
       reminderDate.month,
       reminderDate.day,
-      9, // 09:00 AM
+      9,
       0,
     );
 
-    await zonedSchedule(
-      id: 5000 + leaveId.hashCode % 1000,
-      title: '📅 Pengingat Cuti Besok',
-      body: 'Cuti $leaveType dimulai besok. Pastikan semuanya sudah siap.',
-      scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
+    await _plugin.zonedSchedule(
+      5000 + leaveId.hashCode % 1000,
+      '📅 Pengingat Cuti Besok',
+      'Cuti $leaveType dimulai besok. Pastikan semuanya sudah siap.',
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(_channelReminder, 'Pengingat', importance: Importance.defaultImportance),
+        iOS: DarwinNotificationDetails(),
+      ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: null, // One-time
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: null,
     );
   }
 
@@ -346,10 +346,7 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
     required Importance importance,
     String? payload,
   }) async {
-    if (!_isInitialized) {
-      debugPrint('[NotificationService] Not initialized, skipping notification');
-      return;
-    }
+    if (!_isInitialized) return;
 
     final androidDetails = AndroidNotificationDetails(
       channel,
@@ -365,15 +362,15 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
       presentSound: true,
     );
 
-    await show(
-      id: id,
-      title: title,
-      body: body,
-      payload: payload,
-      notificationDetails: NotificationDetails(
+    await _plugin.show(
+      id,
+      title,
+      body,
+      NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       ),
+      payload: payload,
     );
   }
 
@@ -402,13 +399,11 @@ class NotificationService extends FlutterLocalNotificationsPlugin {
     }
   }
 
-  /// Cancel all notifications
   Future<void> cancelAllNotifications() async {
-    await cancelAll();
+    await _plugin.cancelAll();
   }
 
-  /// Get pending notifications
   Future<List<PendingNotificationRequest>> getPendingNotifications() async {
-    return await pendingNotificationRequests();
+    return await _plugin.pendingNotificationRequests();
   }
 }

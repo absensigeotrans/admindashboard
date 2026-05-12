@@ -27,7 +27,7 @@ class LocationService extends ChangeNotifier {
     // Configure background geolocation
     bg.BackgroundGeolocation.onLocation((bg.Location location) {
       _currentLocation = location;
-      _isMocked = location.isMock ?? false;
+      _isMocked = location.mock ?? false;
       
       if (_isMocked && !_wasMocked) {
         NotificationService().showMockLocationAlert();

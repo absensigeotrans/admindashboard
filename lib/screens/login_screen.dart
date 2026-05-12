@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
 import 'registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,7 +15,25 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _biometricService = BiometricService();
   bool _obscurePassword = true;
+  bool _isBiometricEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometricStatus();
+  }
+
+  Future<void> _checkBiometricStatus() async {
+    final isEnabled = await _biometricService.isFeatureEnabled();
+    final isAvailable = await _biometricService.isBiometricAvailable();
+    if (mounted) {
+      setState(() {
+        _isBiometricEnabled = isEnabled && isAvailable;
+      });
+    }
+  }
 
   void _handleLogin() async {
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -30,9 +49,73 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } else {
-      // AuthWrapper akan otomatis mengarahkan user
-      if (mounted) Navigator.pop(context);
+      // Tanya user apakah mau aktifkan biometric jika belum aktif
+      if (!_isBiometricEnabled) {
+        _showBiometricDialog();
+      } else {
+        if (mounted) Navigator.pop(context);
+      }
     }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    final credentials = await _biometricService.getSavedCredentials();
+    if (credentials['email'] == null || credentials['password'] == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Belum ada data login tersimpan untuk Biometric.')),
+        );
+      }
+      return;
+    }
+
+    final authenticated = await _biometricService.authenticate();
+    if (authenticated) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final error = await authService.signIn(
+        email: credentials['email']!,
+        password: credentials['password']!,
+      );
+
+      if (error != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Biometric Login Gagal: $error'), backgroundColor: Colors.red),
+          );
+        }
+      } else {
+        if (mounted) Navigator.pop(context);
+      }
+    }
+  }
+
+  void _showBiometricDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aktifkan Biometric?'),
+        content: const Text('Apakah Anda ingin menggunakan Sidik Jari/Face ID untuk login selanjutnya?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Nanti Saja'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _biometricService.saveCredentials(
+                _emailController.text.trim(),
+                _passwordController.text.trim(),
+              );
+              if (mounted) {
+                Navigator.pop(context);
+                Navigator.pop(context); // Close Login Screen
+              }
+            },
+            child: const Text('Aktifkan'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -82,16 +165,33 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: isLoading ? null : _handleLogin,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: const Color(0xFF005494),
-                foregroundColor: Colors.white,
-              ),
-              child: isLoading
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Login'),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: isLoading ? null : _handleLogin,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: const Color(0xFF005494),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('Login'),
+                  ),
+                ),
+                if (_isBiometricEnabled) ...[
+                  const SizedBox(width: 12),
+                  IconButton(
+                    onPressed: isLoading ? null : _handleBiometricLogin,
+                    icon: const Icon(Icons.fingerprint, size: 40, color: Color(0xFF005494)),
+                    style: IconButton.styleFrom(
+                      padding: const EdgeInsets.all(12),
+                      backgroundColor: const Color(0xFF005494).withOpacity(0.1),
+                    ),
+                  ),
+                ],
+              ],
             ),
             const Spacer(),
             Row(

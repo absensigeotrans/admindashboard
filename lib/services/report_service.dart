@@ -108,7 +108,9 @@ class ReportService {
                     pw.SizedBox(height: 60),
                     pw.Container(
                       width: 150,
-                      border: const pw.Border(top: pw.BorderSide(width: 1)),
+                      decoration: const pw.BoxDecoration(
+                        border: pw.Border(top: pw.BorderSide(width: 1)),
+                      ),
                       padding: const pw.EdgeInsets.only(top: 5),
                       child: pw.Center(child: pw.Text('Tanda Tangan Karyawan')),
                     ),
