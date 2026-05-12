@@ -1,8 +1,8 @@
-project_id = "epvcxrijxegcsigyrobs"
+project_id = "yoykktgggvvoigrbtvhq"
 
 [api]
 port = 54321
-external_url = "https://epvcxrijxegcsigyrobs.supabase.co"
+external_url = "https://yoykktgggvvoigrbtvhq.supabase.co"
 
 [db]
 port = 54322
@@ -11,7 +11,7 @@ shadow_port = 54320
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://epvcxrijxegcsigyrobs.supabase.co"]
+additional_redirect_urls = ["https://yoykktgggvvoigrbtvhq.supabase.co"]
 jwt_expiry = 3600
 
 [storage]

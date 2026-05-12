@@ -84,6 +84,6 @@
 
 ---
 **Penting untuk Diperhatikan:**
-- **URL Supabase:** `https://epvcxrijxegcsigyrobs.supabase.co`
+- **URL Supabase:** `https://yoykktgggvvoigrbtvhq.supabase.co`
 - Aplikasi difokuskan pada **satu kantor saja** (Kantor Pusat PTK Jakarta). Cabang lain sudah dihilangkan dari PRD dan database.
 - State management menggunakan `Provider`. Lanjutkan menggunakan pola ini untuk servis baru.

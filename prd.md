@@ -85,7 +85,7 @@ intl: ^0.20.2                             # Date/time formatting
 
 ### 3.2 Backend (Supabase)
 
-**Project URL:** `https://epvcxrijxegcsigyrobs.supabase.co`
+**Project URL:** `https://yoykktgggvvoigrbtvhq.supabase.co`
 
 **Fitur:**
 - Email & Password authentication

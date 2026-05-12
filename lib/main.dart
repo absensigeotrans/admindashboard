@@ -18,8 +18,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
-    url: 'https://epvcxrijxegcsigyrobs.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwdmN4cmlqeGVnY3NpZ3lyb2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MjYxNTgsImV4cCI6MjA5NDAwMjE1OH0.wdCOY_mdgd3acgd3FfznphpT3UHsJgz1Io2KYnz1--0',
+    url: 'https://yoykktgggvvoigrbtvhq.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlveWtrdGdnZ3Z2b2lncmJ0dmhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1NDc5MzUsImV4cCI6MjA5NDEyMzkzNX0.5Pj3uE4SXzLh_q8OTC_Ct91tR7Y0RBvXxZzaujVaQpI',
   );
 
   // Initialize local notifications
