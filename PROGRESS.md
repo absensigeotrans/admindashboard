@@ -363,7 +363,7 @@ HEAD
 ```
 1. Go to https://supabase.com and create a project
 2. Get your Project URL and anon key from Settings > API
-3. Create .env.local in geoattend-pro/:
+3. Create .env.local in project root:
    NEXT_PUBLIC_SUPABASE_URL=your_url_here
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_key_here
 4. Run migration in Supabase SQL Editor:

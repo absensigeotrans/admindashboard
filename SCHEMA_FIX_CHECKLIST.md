@@ -55,6 +55,6 @@ Flutter app punya **proyek Supabase sendiri** dengan schema yang sudah benar:
 ## 🧪 Verifikasi
 
 ```bash
-cd geoattend-pro && npx tsc --noEmit    # Next.js — ✅ 0 error
-cd .. && flutter analyze lib/            # Flutter — jalankan setelah setup
+npx tsc --noEmit          # Next.js — ✅ 0 error
+flutter analyze lib/      # Flutter — jalankan setelah setup
 ```
