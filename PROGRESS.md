@@ -15,7 +15,8 @@ HEAD
 | Backend / Database | ✅ 90% |
 | Authentication | ✅ 85% |
 | Geofencing Engine | ✅ 95% |
-| HR Dashboard | ✅ 90% |
+| HR Dashboard | ✅ 95% |
+| Admin Panel Web | ✅ 100% |
 | Configuration & Setup | ✅ 85% |
 | CI/CD Pipeline | ✅ 80% |
 | Testing | ❌ 0% |
@@ -96,9 +97,9 @@ HEAD
 - [x] Dynamic map centering on user location
 - [x] Responsive height prop
 
-### 8. HR / Admin Dashboard ✅ (90%)
+### 8. HR / Admin Dashboard ✅ (100%)
 - [x] Dashboard main page (`/admin`)
-- [x] Statistics cards (Present/Late/Outside Radius) — today only
+- [x] Statistics cards (Present/Late/Outside Radius) — today, weekly, monthly
 - [x] Quick links to Employees and Offices management
 - [x] Active office info display
 - [x] Recent attendance activity log
@@ -106,6 +107,67 @@ HEAD
 - [x] Employee list with search (name, email, department)
 - [x] Employee stats (total, admins, employees, departments)
 - [x] Role badges (admin=purple, employee=blue)
+- [x] Employee CRUD: edit name/department, toggle role, deactivate/activate
+- [x] Employee detail modal with recent attendance history
+- [x] Employee CSV export
+- [x] Pagination & search for employee list
+- [x] Office management page (`/admin/offices`)
+- [x] Office CRUD with form validation
+- [x] Office stats (attendees count, recent attendees)
+- [x] Office detail modal with coordinates & radius info
+- [x] Reports page (`/admin/reports`)
+- [x] Date range filter + status filter
+- [x] Attendance report table with pagination
+- [x] CSV export for filtered attendance records
+- [x] PDF export with jsPDF (autoTable, summary header)
+- [x] Summary stats (total, present, late, outside)
+- [x] Leave requests page (`/admin/leave-requests`)
+- [x] Tabbed view (Pending/Approved/Rejected/All)
+- [x] Approve/Reject with Supabase DB persistence
+- [x] Create leave request modal
+- [x] Leave request cards with type, dates, days count, reason
+- [x] Settings page (`/admin/settings`)
+- [x] Late threshold configuration (hour + minute)
+- [x] Default geofence radius setting
+- [x] System info display (Supabase project, app version)
+- [x] Sync status indicator (local vs DB)
+- [x] Migration guide for settings table
+- [x] Activity logs page (`/admin/activity-logs`)
+- [x] Date range filter for logs
+- [x] Log table with timestamp, action, attendance ID, details
+- [x] Stats cards (total logs, clock-ins, clock-outs)
+- [x] Pagination
+- [x] Live monitoring page (`/admin/monitoring`)
+- [x] Real-time clock-in feed via Supabase Realtime subscriptions
+- [x] Stats: total today, last 5 min, present count
+- [x] Animated live indicator (pulsing green dot)
+- [x] Employee avatar + status badge per record
+- [x] Admin layout (`app/admin/layout.tsx`)
+- [x] Sidebar navigation using existing `Sidebar` component
+- [x] Mobile responsive (hamburger menu, overlay, slide-in)
+- [x] Auth enforcement (redirect non-admins)
+- [x] ToastContainer for notifications
+- [x] Database Migrations
+- [x] Migration 002 — `settings` table + updated `validate_attendance_geofence()` trigger
+- [x] Migration 003 — `leave_requests` table + RLS policies + trigger
+- [x] UI Component Library (`src/components/ui/`)
+- [x] `StatsCard.tsx` — reusable stat display
+- [x] `Modal.tsx` — dialog/modal component
+- [x] `Button.tsx` — primary/secondary/ghost/danger variants
+- [x] `Badge.tsx` — status badges (success/warning/danger/info/default)
+- [x] `Table.tsx` — sortable table with loading state
+- [x] `Pagination.tsx` — page navigation
+- [x] `SearchInput.tsx` — search with icon
+- [x] `DateRangePicker.tsx` — from/to date inputs
+- [x] `FormInput.tsx` — input + select with label
+- [x] `Toast.tsx` — toast notifications (global singleton pattern)
+- [x] `Tabs.tsx` — tab navigation with counts
+- [x] Custom Hooks for Admin
+- [x] `useEmployees.ts` — fetch, update, toggle role, deactivate/activate, get departments
+- [x] `useReports.ts` — fetch report with users, get stats
+- [x] `useLeaveRequests.ts` — CRUD leave requests via Supabase (real DB)
+- [x] `useAdminSettings.ts` — settings CRUD, sync from DB
+- [x] `useActivityLogs.ts` — fetch activity logs with date filter
 
 ### 9. UI Components ✅ (95%)
 - [x] `DigitalClock.tsx` — real-time clock with date
@@ -184,10 +246,10 @@ HEAD
 - [ ] Detect GPS mock locations
 - [ ] Implement accuracy threshold validation
 
-#### 7. Late Arrival Threshold Configuration ⚠️
-- [ ] Currently hardcoded: 9 AM in PostgreSQL trigger
-- [ ] Should be configurable via `offices` table or settings
-- [ ] Different offices may have different clock-in times
+#### 7. Late Arrival Threshold Configuration ✅
+- [x] Now configurable via `/admin/settings` page + migration 002
+- [x] Settings stored in `settings` table, read by trigger `validate_attendance_geofence()`
+- [ ] Different offices may have different clock-in times (future enhancement)
 
 #### 8. Testing ⛔
 - [ ] Unit tests for Haversine formula
@@ -212,8 +274,9 @@ HEAD
 - [ ] Admin notification for suspicious attendance
 
 #### 12. Reports & Export ❌
-- [ ] Export attendance to CSV/Excel
-- [ ] Monthly/weekly attendance reports
+- [x] Export attendance to CSV
+- [ ] Export to Excel
+- [ ] Monthly/weekly attendance reports with charts
 - [ ] Late arrival trend analysis
 
 #### 13. Shift Management ❌
@@ -224,7 +287,7 @@ HEAD
 
 ## 📁 File Inventory
 
-### Source Files (20 files)
+### Source Files (42 files)
 
 | File | Status | Notes |
 |---|---|---|
@@ -232,19 +295,43 @@ HEAD
 | `src/app/layout.tsx` | ✅ Done | Root layout with AuthProvider |
 | `src/app/login/page.tsx` | ✅ Done | Login/Register |
 | `src/app/history/page.tsx` | ✅ Done | Attendance history |
-| `src/app/admin/page.tsx` | ✅ Done | HR Dashboard |
-| `src/app/admin/employees/page.tsx` | ✅ Done | Employee list |
-| `src/app/admin/offices/page.tsx` | ✅ Done | Office CRUD |
+| `src/app/admin/layout.tsx` | ✅ Done | Admin layout with Sidebar + auth |
+| `src/app/admin/page.tsx` | ✅ Done | HR Dashboard (weekly/monthly stats) |
+| `src/app/admin/employees/page.tsx` | ✅ Done | Employee CRUD + CSV export |
+| `src/app/admin/offices/page.tsx` | ✅ Done | Office CRUD + stats |
+| `src/app/admin/reports/page.tsx` | ✅ Done | Attendance reports + CSV + PDF export |
+| `src/app/admin/leave-requests/page.tsx` | ✅ Done | Leave approval (real Supabase) |
+| `src/app/admin/settings/page.tsx` | ✅ Done | System settings + migration guide |
+| `src/app/admin/activity-logs/page.tsx` | ✅ Done | Audit trail viewer |
+| `src/app/admin/monitoring/page.tsx` | ✅ Done | Real-time clock-in feed |
+| `src/components/admin/Sidebar.tsx` | ✅ Done | Sidebar navigation |
+| `src/components/admin/AdminLayout.tsx` | ✅ Done | Legacy layout wrapper |
 | `src/context/AuthContext.tsx` | ✅ Done | Auth state management |
 | `src/hooks/useGeolocation.ts` | ✅ Done | GPS hook |
 | `src/hooks/useAttendance.ts` | ✅ Done | Clock in/out logic |
 | `src/hooks/useOffices.ts` | ✅ Done | Office management |
+| `src/hooks/useEmployees.ts` | ✅ Done | Employee CRUD hook |
+| `src/hooks/useReports.ts` | ✅ Done | Report generation hook |
+| `src/hooks/useLeaveRequests.ts` | ✅ Done | Leave requests hook (real Supabase) |
+| `src/hooks/useAdminSettings.ts` | ✅ Done | Settings hook |
+| `src/hooks/useActivityLogs.ts` | ✅ Done | Activity logs hook |
 | `src/components/Map.tsx` | ✅ Done | Leaflet map |
 | `src/components/AttendancePage.tsx` | ✅ Done | Main attendance UI |
 | `src/components/AttendanceButton.tsx` | ✅ Done | Clock in/out buttons |
 | `src/components/DigitalClock.tsx` | ✅ Done | Real-time clock |
 | `src/components/DistanceIndicator.tsx` | ✅ Done | Distance visualization |
 | `src/components/Toast.tsx` | ✅ Done | Notifications |
+| `src/components/ui/StatsCard.tsx` | ✅ Done | Reusable stat card |
+| `src/components/ui/Modal.tsx` | ✅ Done | Dialog component |
+| `src/components/ui/Button.tsx` | ✅ Done | Button variants |
+| `src/components/ui/Badge.tsx` | ✅ Done | Status badges |
+| `src/components/ui/Table.tsx` | ✅ Done | Sortable table |
+| `src/components/ui/Pagination.tsx` | ✅ Done | Page navigation |
+| `src/components/ui/SearchInput.tsx` | ✅ Done | Search input |
+| `src/components/ui/DateRangePicker.tsx` | ✅ Done | Date range selector |
+| `src/components/ui/FormInput.tsx` | ✅ Done | Form inputs |
+| `src/components/ui/Tabs.tsx` | ✅ Done | Tab navigation |
+| `src/components/ui/Toast.tsx` | ✅ Done | Toast notifications |
 | `src/lib/supabase.ts` | ✅ Done | Supabase client |
 | `src/lib/utils.ts` | ✅ Done | Haversine + formatters |
 | `src/lib/database.types.ts` | ✅ Done | TypeScript types |
@@ -255,6 +342,8 @@ HEAD
 | File | Status | Notes |
 |---|---|---|
 | `supabase/migrations/001_initial_schema.sql` | ✅ Done | Full schema with triggers & RLS |
+| `supabase/migrations/002_admin_settings.sql` | ✅ Done | Settings table + updated geofence trigger |
+| `supabase/migrations/003_leave_requests.sql` | ✅ Done | Leave requests table + RLS |
 
 ### Configuration Files
 
@@ -328,10 +417,11 @@ HEAD
 | 3.2 Authentication | ✅ 85% | Missing email verification |
 | 3.2 Interactive Map | ✅ 90% | Leaflet with geofence circle |
 | 3.2 Attendance Action | ✅ 95% | Clock in/out with status |
-| 3.2 HR Dashboard | ✅ 90% | Stats + monitoring + office management |
+| 3.2 HR Dashboard | ✅ 95% | Stats + monitoring + office management + reports + settings + logs |
+| 8. Admin Panel Web | ✅ 100% | 8 pages, sidebar layout, real-time monitoring, PDF export, 2 migrations |
 | 4. Technical Stack | ✅ 100% | All tech implemented |
 | 5. Database Schema | ✅ 100% | All tables + triggers + RLS |
-| 6. UI/UX Specifications | ✅ 90% | Responsive, clean, professional |
+| 6. UI/UX Specifications | ✅ 95% | Responsive, clean, professional + UI component library |
 | 7. Security & Business Rules | ✅ 90% | Server-side validation via trigger |
 
 ---
@@ -340,7 +430,7 @@ HEAD
 
 - **Server-Side Validation**: Distance calculation is done in PostgreSQL trigger `validate_attendance_geofence()` BEFORE insert. This prevents GPS manipulation on the client side.
 - **RLS Policies**: All tables have Row Level Security enabled. Employees can only see their own data; admins can see all.
-- **Late Threshold**: Currently hardcoded at 9 AM in database trigger. This should be made configurable per office in future.
+- **Late Threshold**: Configurable via `/admin/settings` page (migration 002 required to persist to DB). Falls back to localStorage if DB table doesn't exist yet.
 - **No API Key Required**: Map uses OpenStreetMap which is free and doesn't require API key.
 - **Tailwind v4**: Project uses Tailwind CSS v4 which has a different configuration approach (no tailwind.config.js needed, uses @tailwindcss/postcss).
 
@@ -432,6 +522,18 @@ HEAD
 - [x] **Pengecualian Geofence Driver**: Driver/Sopir bisa absensi di mana saja (bebas radius 100m).
 - [ ] **Pengingat Terjadwal**: Aktifkan fitur `scheduleCheckInReminder` di Settings UI.
 - [ ] **Dashboard Analytics**: Tambahkan grafik statistik bulanan di `StatisticsScreen`.
+- [x] **Admin Dashboard Panel Web** (100% selesai): Halaman panel dashboard admin komprehensif untuk mengontrol semua fitur backend dari web menggunakan akun admin.
+  - [x] Statistik lengkap (total karyawan, kehadiran hari ini, rata-rata keterlambatan, dll)
+  - [x] Manajemen karyawan (approve, nonaktifkan, edit role/departemen)
+  - [x] Manajemen lokasi kantor (tambah/edit/hapus geofence)
+  - [x] Export laporan absensi (CSV + PDF)
+  - [x] Approval pengajuan cuti (approve/reject dengan alasan + real DB)
+  - [x] Pengaturan sistem (jam masuk, toleransi keterlambatan, dll)
+  - [x] Log aktivitas admin (audit trail)
+  - [x] Monitoring absensi real-time (live tracking via Supabase Realtime)
+  - [x] Sidebar navigation layout (mobile responsive)
+  - [x] Migration 002 — tabel `settings` + update trigger
+  - [x] Migration 003 — tabel `leave_requests` + RLS policies
 
 ---
 **Penting untuk Diperhatikan:**
