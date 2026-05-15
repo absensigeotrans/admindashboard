@@ -1,4 +1,4 @@
-CREATE TABLE public.attendance (
+CREATE TABLE IF NOT EXISTS public.attendance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     shift_id UUID REFERENCES public.shifts(id) ON DELETE SET NULL,

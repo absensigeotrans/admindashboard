@@ -18,18 +18,23 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Profiles Policies
+DROP POLICY IF EXISTS "Profiles are viewable by own user" ON public.profiles;
 CREATE POLICY "Profiles are viewable by own user" ON public.profiles
     FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Profiles are viewable by admins" ON public.profiles;
 CREATE POLICY "Profiles are viewable by admins" ON public.profiles
     FOR SELECT USING (public.is_admin());
 
 -- Attendance Policies
+DROP POLICY IF EXISTS "Attendance is viewable by own user" ON public.attendance;
 CREATE POLICY "Attendance is viewable by own user" ON public.attendance
     FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Attendance is insertable by own user" ON public.attendance;
 CREATE POLICY "Attendance is insertable by own user" ON public.attendance
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Attendance is viewable by admins" ON public.attendance;
 CREATE POLICY "Attendance is viewable by admins" ON public.attendance
     FOR SELECT USING (public.is_admin());

@@ -2,13 +2,19 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- User roles enum
-CREATE TYPE user_role AS ENUM ('employee', 'admin');
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('employee', 'admin');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Attendance status enum
-CREATE TYPE attendance_status AS ENUM ('present', 'late', 'outside_radius');
+DO $$ BEGIN
+  CREATE TYPE attendance_status AS ENUM ('present', 'late', 'outside_radius');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Profiles table
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT NOT NULL,
@@ -19,7 +25,7 @@ CREATE TABLE profiles (
 );
 
 -- Offices table
-CREATE TABLE offices (
+CREATE TABLE IF NOT EXISTS offices (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   latitude DOUBLE PRECISION NOT NULL,
@@ -30,7 +36,7 @@ CREATE TABLE offices (
 );
 
 -- Attendance table
-CREATE TABLE attendance (
+CREATE TABLE IF NOT EXISTS attendance (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   check_in_time TIMESTAMPTZ DEFAULT NOW(),
@@ -45,7 +51,7 @@ CREATE TABLE attendance (
 );
 
 -- Attendance logs table
-CREATE TABLE attendance_logs (
+CREATE TABLE IF NOT EXISTS attendance_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   attendance_id UUID REFERENCES attendance(id) ON DELETE CASCADE,
   action TEXT NOT NULL,
@@ -63,12 +69,15 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_offices_updated_at ON offices;
 CREATE TRIGGER update_offices_updated_at BEFORE UPDATE ON offices
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_attendance_updated_at ON attendance;
 CREATE TRIGGER update_attendance_updated_at BEFORE UPDATE ON attendance
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -122,6 +131,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to validate geofence before insert
+DROP TRIGGER IF EXISTS validate_geofence_before_insert ON attendance;
 CREATE TRIGGER validate_geofence_before_insert
   BEFORE INSERT ON attendance
   FOR EACH ROW
@@ -134,12 +144,15 @@ ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attendance_logs ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 CREATE POLICY "Users can view own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Admins can view all profiles" ON profiles;
 CREATE POLICY "Admins can view all profiles" ON profiles
   FOR SELECT USING (
     EXISTS (
@@ -147,6 +160,7 @@ CREATE POLICY "Admins can view all profiles" ON profiles
     )
   );
 
+DROP POLICY IF EXISTS "Admins can update all profiles" ON profiles;
 CREATE POLICY "Admins can update all profiles" ON profiles
   FOR ALL USING (
     EXISTS (
@@ -155,9 +169,11 @@ CREATE POLICY "Admins can update all profiles" ON profiles
   );
 
 -- Offices policies
+DROP POLICY IF EXISTS "Anyone can view offices" ON offices;
 CREATE POLICY "Anyone can view offices" ON offices
   FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Only admins can modify offices" ON offices;
 CREATE POLICY "Only admins can modify offices" ON offices
   FOR ALL USING (
     EXISTS (
@@ -166,15 +182,19 @@ CREATE POLICY "Only admins can modify offices" ON offices
   );
 
 -- Attendance policies
+DROP POLICY IF EXISTS "Users can view own attendance" ON attendance;
 CREATE POLICY "Users can view own attendance" ON attendance
   FOR SELECT USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert own attendance" ON attendance;
 CREATE POLICY "Users can insert own attendance" ON attendance
   FOR INSERT WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update own attendance" ON attendance;
 CREATE POLICY "Users can update own attendance" ON attendance
   FOR UPDATE USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Admins can view all attendance" ON attendance;
 CREATE POLICY "Admins can view all attendance" ON attendance
   FOR SELECT USING (
     EXISTS (
@@ -183,6 +203,7 @@ CREATE POLICY "Admins can view all attendance" ON attendance
   );
 
 -- Attendance logs policies
+DROP POLICY IF EXISTS "Users can view own attendance logs" ON attendance_logs;
 CREATE POLICY "Users can view own attendance logs" ON attendance_logs
   FOR SELECT USING (
     EXISTS (
@@ -192,6 +213,7 @@ CREATE POLICY "Users can view own attendance logs" ON attendance_logs
     )
   );
 
+DROP POLICY IF EXISTS "Admins can view all attendance logs" ON attendance_logs;
 CREATE POLICY "Admins can view all attendance logs" ON attendance_logs
   FOR SELECT USING (
     EXISTS (
@@ -215,6 +237,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger for new user signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

@@ -1,4 +1,4 @@
-CREATE TABLE public.offices (
+CREATE TABLE IF NOT EXISTS public.offices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     latitude DOUBLE PRECISION NOT NULL,
@@ -9,3 +9,6 @@ CREATE TABLE public.offices (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.offices ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.offices ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;

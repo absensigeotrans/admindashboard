@@ -1,4 +1,4 @@
-CREATE TABLE public.leave_requests (
+CREATE TABLE IF NOT EXISTS public.leave_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     leave_type TEXT CHECK (leave_type IN ('cuti', 'izin', 'sakit')),

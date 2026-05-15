@@ -37,7 +37,7 @@ INSERT INTO auth.users (
     '',
     '',
     ''
-) RETURNING id;
+) ON CONFLICT (email) DO NOTHING;
 
 -- Note: The trigger on_auth_user_created will automatically create the profile.
 -- However, we need to UPDATE it to give full control (is_owner, is_active, etc.)
@@ -49,13 +49,15 @@ DECLARE
 BEGIN
     SELECT id INTO admin_id FROM auth.users WHERE email = 'admin.ptk@gmail.com';
     
-    UPDATE public.profiles 
-    SET 
-        role = 'admin',
-        is_active = true,
-        is_owner = true,
-        can_manage_accounts = true,
-        employee_id = 'ADM-001',
-        full_name = 'Super Admin PTK'
-    WHERE id = admin_id;
+    IF admin_id IS NOT NULL THEN
+        UPDATE public.profiles 
+        SET 
+            role = 'admin',
+            is_active = true,
+            is_owner = true,
+            can_manage_accounts = true,
+            employee_id = 'ADM-001',
+            full_name = 'Super Admin PTK'
+        WHERE id = admin_id;
+    END IF;
 END $$;
