@@ -31,7 +31,7 @@ jobs:
       - name: Link Supabase project
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-        run: supabase projects link --project-ref $SUPABASE_PROJECT_REF
+        run: supabase projects link --project-id $SUPABASE_PROJECT_REF
         continue-on-error: false
 
       - name: Apply pending migrations
