@@ -1,0 +1,20 @@
+CREATE TABLE public.attendance (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    shift_id UUID REFERENCES public.shifts(id) ON DELETE SET NULL,
+    office_id UUID REFERENCES public.offices(id) ON DELETE SET NULL,
+    check_in_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    check_in_latitude DOUBLE PRECISION,
+    check_in_longitude DOUBLE PRECISION,
+    check_in_accuracy DOUBLE PRECISION,
+    check_in_location_data JSONB,
+    check_out_time TIMESTAMPTZ,
+    check_out_latitude DOUBLE PRECISION,
+    check_out_longitude DOUBLE PRECISION,
+    check_out_accuracy DOUBLE PRECISION,
+    check_out_location_data JSONB,
+    is_valid BOOLEAN DEFAULT true,
+    distance_from_office DOUBLE PRECISION,
+    is_mocked BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
