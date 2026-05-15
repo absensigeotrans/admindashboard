@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useEffect, useState, useCallback } from 'react';
 import { useOffices } from '@/hooks/useOffices';
+import { supabase } from '@/lib/supabase';
 import { formatDistance } from '@/lib/utils';
-import { ArrowLeft, Plus, MapPin, Save, Trash2 } from 'lucide-react';
-import Link from 'next/link';
-import { Toast } from '@/components/Toast';
+import { StatsCard } from '@/components/ui/StatsCard';
+import { Pagination } from '@/components/ui/Pagination';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { FormInput } from '@/components/ui/FormInput';
+import { toast } from '@/components/ui/Toast';
+import { MapPin, Plus, Save, Trash2, Users, Clock } from 'lucide-react';
 
 interface OfficeForm {
   name: string;
@@ -15,27 +19,66 @@ interface OfficeForm {
   geofence_radius: string;
 }
 
+interface OfficeStats {
+  employeeCount: number;
+  recentAttendees: { name: string; time: string }[];
+}
+
 export default function OfficesPage() {
-  const { user, profile, loading: authLoading } = useAuth();
   const { offices, loading, fetchOffices, createOffice, updateOffice, deleteOffice } = useOffices();
-  const [isEditing, setIsEditing] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<OfficeForm>({
-    name: '',
-    latitude: '',
-    longitude: '',
-    geofence_radius: '100',
-  });
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [form, setForm] = useState<OfficeForm>({ name: '', latitude: '', longitude: '', geofence_radius: '100' });
+  const [saving, setSaving] = useState(false);
+  const [officeStats, setOfficeStats] = useState<Record<string, OfficeStats>>({});
+  const [selectedOffice, setSelectedOffice] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOffices();
   }, [fetchOffices]);
 
+  // Fetch stats per office
+  useEffect(() => {
+    if (offices.length === 0) return;
+
+    const fetchStats = async () => {
+      const stats: Record<string, OfficeStats> = {};
+
+      for (const office of offices) {
+        // Count unique employees who attended this office
+        const { count } = await supabase
+          .from('attendance')
+          .select('user_id', { count: 'exact', head: true });
+
+        // Get recent attendees
+        const { data: recent } = await supabase
+          .from('attendance')
+          .select('check_in_time, profiles:user_id(full_name)')
+          .order('check_in_time', { ascending: false })
+          .limit(5);
+
+        const attendees = (recent || []).slice(0, 5).map((r: any) => ({
+          name: r.profiles?.full_name || 'Unknown',
+          time: new Date(r.check_in_time).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
+        }));
+
+        stats[office.id] = {
+          employeeCount: count || 0,
+          recentAttendees: attendees,
+        };
+      }
+
+      setOfficeStats(stats);
+    };
+
+    fetchStats();
+  }, [offices]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
 
-    const officeData = {
+    const data = {
       name: form.name,
       latitude: parseFloat(form.latitude),
       longitude: parseFloat(form.longitude),
@@ -44,21 +87,20 @@ export default function OfficesPage() {
 
     let result;
     if (editingId) {
-      result = await updateOffice(editingId, officeData);
+      result = await updateOffice(editingId, data);
     } else {
-      result = await createOffice(officeData);
+      result = await createOffice(data);
     }
 
+    setSaving(false);
     if (result.success) {
-      setToast({
-        message: editingId ? 'Office updated successfully!' : 'Office created successfully!',
-        type: 'success',
-      });
-      setIsEditing(false);
+      toast.success(editingId ? 'Office updated' : 'Office created');
+      setShowForm(false);
       setEditingId(null);
       setForm({ name: '', latitude: '', longitude: '', geofence_radius: '100' });
+      fetchOffices();
     } else {
-      setToast({ message: result.error || 'Failed to save office', type: 'error' });
+      toast.error(result.error || 'Failed to save');
     }
   };
 
@@ -70,214 +112,163 @@ export default function OfficesPage() {
       longitude: office.longitude.toString(),
       geofence_radius: office.geofence_radius.toString(),
     });
-    setIsEditing(true);
+    setShowForm(true);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this office?')) return;
-
     const result = await deleteOffice(id);
     if (result.success) {
-      setToast({ message: 'Office deleted successfully!', type: 'success' });
+      toast.success('Office deleted');
+      fetchOffices();
     } else {
-      setToast({ message: result.error || 'Failed to delete office', type: 'error' });
+      toast.error('Failed to delete');
     }
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!user || profile?.role !== 'admin') {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/';
-    }
-    return null;
-  }
+  const stats = officeStats[selectedOffice || ''];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Link
-            href="/admin"
-            className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <h1 className="text-xl font-bold text-gray-900">Office Locations</h1>
+    <div className="space-y-5">
+      {/* Add New Button */}
+      <div className="flex justify-between items-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
+          <StatsCard icon={<MapPin className="w-5 h-5" />} value={offices.length} label="Total Offices" color="blue" />
+          <StatsCard
+            icon={<Users className="w-5 h-5" />}
+            value={Object.values(officeStats).reduce((s, v) => s + v.employeeCount, 0)}
+            label="Total Attendees"
+            color="green"
+          />
+          <StatsCard
+            icon={<Clock className="w-5 h-5" />}
+            value={offices.reduce((s, o) => s + o.geofence_radius, 0)}
+            label="Total Radius (m)"
+            color="purple"
+          />
         </div>
-      </header>
+        <Button onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', latitude: '', longitude: '', geofence_radius: '100' }); }}>
+          <Plus className="w-4 h-4" /> Add Office
+        </Button>
+      </div>
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-6">
-        {/* Add New Button */}
-        {!isEditing && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="mb-6 flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Add Office Location
-          </button>
-        )}
-
-        {/* Form */}
-        {isEditing && (
-          <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              {editingId ? 'Edit Office' : 'New Office'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Office Name
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="e.g., Jakarta Office"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Latitude
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.latitude}
-                    onChange={(e) => setForm({ ...form, latitude: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    placeholder="-6.2088"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Longitude
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.longitude}
-                    onChange={(e) => setForm({ ...form, longitude: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    placeholder="106.8456"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Geofence Radius (meters)
-                </label>
-                <input
-                  type="number"
-                  value={form.geofence_radius}
-                  onChange={(e) => setForm({ ...form, geofence_radius: e.target.value })}
-                  required
-                  min="10"
-                  max="10000"
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  placeholder="100"
-                />
-                <p className="text-sm text-gray-500 mt-1">
-                  Recommended: 100 meters
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  <Save className="w-5 h-5" />
-                  {editingId ? 'Update' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditingId(null);
-                    setForm({ name: '', latitude: '', longitude: '', geofence_radius: '100' });
-                  }}
-                  className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+      {/* Form Modal */}
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingId ? 'Edit Office' : 'New Office'} size="md">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormInput label="Office Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Jakarta HQ" required />
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput label="Latitude" type="number" step="any" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} placeholder="-6.2088" required />
+            <FormInput label="Longitude" type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} placeholder="106.8456" required />
           </div>
-        )}
+          <FormInput label="Geofence Radius (meters)" type="number" min="10" max="10000" value={form.geofence_radius} onChange={(e) => setForm({ ...form, geofence_radius: e.target.value })} hint="Recommended: 100 meters" required />
+          <div className="flex gap-2 pt-2">
+            <Button type="submit" loading={saving} className="flex-1">
+              <Save className="w-4 h-4" /> {editingId ? 'Update' : 'Save'}
+            </Button>
+            <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>Cancel</Button>
+          </div>
+        </form>
+      </Modal>
 
-        {/* Offices List */}
-        <div className="space-y-4">
-          {offices.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl shadow-sm border">
-              <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No office locations configured</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Add an office to enable geofencing
-              </p>
-            </div>
-          ) : (
-            offices.map((office) => (
-              <div
-                key={office.id}
-                className="bg-white rounded-xl shadow-sm border p-4"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{office.name}</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {office.latitude.toFixed(6)}, {office.longitude.toFixed(6)}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Radius: {formatDistance(office.geofence_radius)}
-                    </p>
+      {/* Detail Modal */}
+      <Modal isOpen={!!selectedOffice} onClose={() => setSelectedOffice(null)} title="Office Details" size="md">
+        {selectedOffice && (() => {
+          const office = offices.find((o) => o.id === selectedOffice);
+          if (!office) return null;
+          const s = officeStats[selectedOffice];
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500">Coordinates</p>
+                  <p className="font-medium">{office.latitude.toFixed(6)}, {office.longitude.toFixed(6)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Radius</p>
+                  <p className="font-medium">{formatDistance(office.geofence_radius)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Total Attendees</p>
+                  <p className="font-medium">{s?.employeeCount || 0}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Created</p>
+                  <p className="font-medium">{new Date(office.created_at).toLocaleDateString('id-ID')}</p>
+                </div>
+              </div>
+
+              {s?.recentAttendees && s.recentAttendees.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Recent Attendees</h4>
+                  <div className="space-y-2">
+                    {s.recentAttendees.map((a, i) => (
+                      <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-600">
+                            {a.name.charAt(0)}
+                          </div>
+                          <span className="text-sm">{a.name}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">{a.time}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleEdit(office)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* Offices List */}
+      <div className="space-y-4">
+        {offices.length === 0 ? (
+          <div className="text-center py-16 bg-white rounded-xl border">
+            <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-600 font-medium">No office locations</p>
+            <p className="text-sm text-gray-500 mt-1">Add an office to enable geofencing</p>
+            <Button className="mt-4" onClick={() => setShowForm(true)}>
+              <Plus className="w-4 h-4" /> Add Office
+            </Button>
+          </div>
+        ) : (
+          offices.map((office) => {
+            const s = officeStats[office.id];
+            return (
+              <div key={office.id} className="bg-white rounded-xl shadow-sm border p-5 hover:border-blue-200 transition-colors">
+                <div className="flex items-start justify-between gap-4">
+                  <button
+                    onClick={() => setSelectedOffice(office.id)}
+                    className="text-left flex-1 hover:text-blue-600"
+                  >
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-blue-600" />
+                      {office.name}
+                    </h3>
+                    <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-500">
+                      <span>{office.latitude.toFixed(6)}, {office.longitude.toFixed(6)}</span>
+                      <span className="bg-gray-100 px-2 py-0.5 rounded text-xs">{formatDistance(office.geofence_radius)} radius</span>
+                      {s && (
+                        <>
+                          <span className="text-green-600 font-medium">{s.employeeCount} attendees</span>
+                          <span>{s.recentAttendees.length} recent</span>
+                        </>
+                      )}
+                    </div>
+                  </button>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="ghost" onClick={() => handleEdit(office)}>
                       <Save className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(office.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDelete(office.id)} className="text-red-600 hover:bg-red-50">
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </main>
-
-      {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

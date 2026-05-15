@@ -1,4 +1,4 @@
-export type UserRole = 'employee' | 'admin';
+export type UserRole = 'employee' | 'admin' | 'inactive';
 
 export type AttendanceStatus = 'present' | 'late' | 'outside_radius';
 
