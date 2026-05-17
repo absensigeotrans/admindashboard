@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/admin_service.dart';
+import '../services/auth_service.dart';
 import 'package:intl/intl.dart';
 
 class AdminScreen extends StatefulWidget {
@@ -39,6 +40,17 @@ class _AdminScreenState extends State<AdminScreen>
         backgroundColor: const Color(0xFF005494),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () {
+              final authService =
+                  Provider.of<AuthService>(context, listen: false);
+              authService.signOut();
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,

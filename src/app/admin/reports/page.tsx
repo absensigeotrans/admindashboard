@@ -15,12 +15,12 @@ import { format } from 'date-fns';
 import { formatDistance } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Download, FileText, CheckCircle, Clock, XCircle, FileDown } from 'lucide-react';
+import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
 export default function ReportsPage() {
-  const { records, loading, fetchReportWithUsers, getStats } = useReports();
+  const { records, loading, fetchReportWithUsers, getStats, error } = useReports();
 
   const [from, setFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30);
@@ -28,17 +28,25 @@ export default function ReportsPage() {
   });
   const [to, setTo] = useState(() => new Date().toISOString().split('T')[0]);
   const [status, setStatus] = useState<AttendanceStatus | ''>('');
+  const [mockFilter, setMockFilter] = useState<string>('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [stats, setStats] = useState({ total: 0, present: 0, late: 0, outside: 0, avgDistance: 0 });
+  const [stats, setStats] = useState({ total: 0, present: 0, late: 0, outside: 0, suspicious: 0, avgDistance: 0 });
+
+  const filteredRecords = mockFilter === 'suspicious'
+    ? records.filter((r) => r.is_mocked)
+    : records;
 
   const load = useCallback(async (f = from, t = to, s = status, p = page) => {
     const result = await fetchReportWithUsers({ from: f, to: t, status: s || undefined }, p, PAGE_SIZE);
     setTotal(result.count);
-    const computed = getStats(result.data);
+  }, [fetchReportWithUsers, page]);
+
+  useEffect(() => {
+    const computed = getStats(filteredRecords);
     setStats(computed);
-  }, [fetchReportWithUsers, getStats, page]);
+  }, [filteredRecords, getStats]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -51,6 +59,7 @@ export default function ReportsPage() {
     setFrom(new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]);
     setTo(new Date().toISOString().split('T')[0]);
     setStatus('');
+    setMockFilter('');
     setSearch('');
     setPage(1);
     load(new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0], new Date().toISOString().split('T')[0], '', 1);
@@ -58,15 +67,16 @@ export default function ReportsPage() {
 
   // CSV Export of filtered records
   const exportCSV = () => {
-    const headers = ['Date', 'Check-in Time', 'Check-out Time', 'Status', 'Distance', 'Lat', 'Lng'];
-    const rows = records.map((r) => [
+    const headers = ['Employee', 'Date', 'Check-in Time', 'Check-out Time', 'Status', 'Distance', 'Lat', 'Lng'];
+    const rows = records.map((r: any) => [
+      r.profiles?.full_name || '',
       format(new Date(r.check_in_time), 'yyyy-MM-dd'),
       format(new Date(r.check_in_time), 'HH:mm:ss'),
       r.check_out_time ? format(new Date(r.check_out_time), 'HH:mm:ss') : '',
       r.status,
       r.distance_from_office.toFixed(2) + 'm',
-      r.latitude,
-      r.longitude,
+      r.check_in_latitude,
+      r.check_in_longitude,
     ]);
     const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -88,14 +98,15 @@ export default function ReportsPage() {
     doc.text(`Generated: ${new Date().toLocaleString('id-ID')}`, 14, 23);
     doc.text(`Total Records: ${stats.total} | Present: ${stats.present} | Late: ${stats.late} | Outside: ${stats.outside} | Avg Distance: ${formatDistance(stats.avgDistance)}`, 14, 30);
 
-    const headers = [['Date', 'Check-in', 'Check-out', 'Status', 'Distance', 'Coordinates']];
-    const rows = records.map((r) => [
+    const headers = [['Employee', 'Date', 'Check-in', 'Check-out', 'Status', 'Distance', 'Coordinates']];
+    const rows = records.map((r: any) => [
+      r.profiles?.full_name || '—',
       format(new Date(r.check_in_time), 'dd MMM yyyy'),
       format(new Date(r.check_in_time), 'HH:mm'),
       r.check_out_time ? format(new Date(r.check_out_time), 'HH:mm') : '—',
       r.status.replace('_', ' '),
       formatDistance(r.distance_from_office),
-      `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}`,
+      `${r.check_in_latitude.toFixed(4)}, ${r.check_in_longitude.toFixed(4)}`,
     ]);
 
     autoTable(doc, {
@@ -112,6 +123,11 @@ export default function ReportsPage() {
   };
 
   const columns = [
+    {
+      key: 'user',
+      header: 'Employee',
+      render: (row: Attendance & { profiles?: { full_name: string } }) => row.profiles?.full_name ?? '—',
+    },
     {
       key: 'date',
       header: 'Date',
@@ -132,9 +148,14 @@ export default function ReportsPage() {
       key: 'status',
       header: 'Status',
       render: (row: Attendance) => (
-        <Badge variant={row.status === 'present' ? 'success' : row.status === 'late' ? 'warning' : 'danger'}>
-          {row.status.replace('_', ' ')}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={row.status === 'present' ? 'success' : row.status === 'late' ? 'warning' : 'danger'}>
+            {row.status.replace('_', ' ')}
+          </Badge>
+          {row.is_mocked && (
+            <Badge variant="danger">Suspicious</Badge>
+          )}
+        </div>
       ),
     },
     {
@@ -148,7 +169,7 @@ export default function ReportsPage() {
       header: 'Location',
       render: (row: Attendance) => (
         <span className="text-xs text-gray-500">
-          {row.latitude.toFixed(4)}, {row.longitude.toFixed(4)}
+          {row.check_in_latitude.toFixed(4)}, {row.check_in_longitude.toFixed(4)}
         </span>
       ),
     },
@@ -176,6 +197,17 @@ export default function ReportsPage() {
               <option value="outside_radius">Outside Radius</option>
             </select>
           </div>
+          <div className="w-full lg:w-48">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Kejanggalan Lokasi</label>
+            <select
+              value={mockFilter}
+              onChange={(e) => { setMockFilter(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2.5 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Semua Records</option>
+              <option value="suspicious">Hanya Kejanggalan</option>
+            </select>
+          </div>
           <div className="flex gap-2">
             <Button onClick={handleFilter}>Apply Filters</Button>
             <Button variant="ghost" onClick={handleReset}>Reset</Button>
@@ -189,18 +221,26 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Error display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+          {error}
+        </div>
+      )}
+
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatsCard icon={<FileText className="w-5 h-5" />} value={stats.total} label="Total Records" color="blue" />
         <StatsCard icon={<CheckCircle className="w-5 h-5" />} value={stats.present} label="Present" color="green" />
         <StatsCard icon={<Clock className="w-5 h-5" />} value={stats.late} label="Late" color="yellow" />
         <StatsCard icon={<XCircle className="w-5 h-5" />} value={stats.outside} label="Outside" color="red" />
+        <StatsCard icon={<AlertTriangle className="w-5 h-5" />} value={stats.suspicious} label="Kejanggalan" color="red" />
       </div>
 
       {/* Table */}
       <Table
         columns={columns}
-        data={records}
+        data={filteredRecords}
         loading={loading}
         emptyText="No attendance records found for the selected filters"
         sortKey="date"

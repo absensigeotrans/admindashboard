@@ -14,8 +14,8 @@ interface LiveAttendance {
   check_in_time: string;
   status: string;
   distance_from_office: number;
-  latitude: number;
-  longitude: number;
+  check_in_latitude: number;
+  check_in_longitude: number;
   user_name?: string;
 }
 
@@ -44,8 +44,8 @@ export default function MonitoringPage() {
           check_in_time: r.check_in_time,
           status: r.status,
           distance_from_office: r.distance_from_office,
-          latitude: r.latitude,
-          longitude: r.longitude,
+          check_in_latitude: r.check_in_latitude,
+          check_in_longitude: r.check_in_longitude,
           user_name: r.profiles?.full_name || 'Unknown',
         }));
         setLiveRecords(mapped);
@@ -80,8 +80,8 @@ export default function MonitoringPage() {
             check_in_time: newRecord.check_in_time,
             status: newRecord.status,
             distance_from_office: newRecord.distance_from_office,
-            latitude: newRecord.latitude,
-            longitude: newRecord.longitude,
+            check_in_latitude: newRecord.check_in_latitude,
+            check_in_longitude: newRecord.check_in_longitude,
             user_name: profile?.full_name || 'Unknown',
           };
 

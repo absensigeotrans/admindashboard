@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
-import { AttendancePage } from "@/components/AttendancePage";
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return <AttendancePage />;
+  redirect('/admin');
 }

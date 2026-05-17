@@ -1,4 +1,4 @@
-export type UserRole = 'employee' | 'admin' | 'inactive';
+export type UserRole = 'employee' | 'admin' | 'driver' | 'inactive';
 
 export type AttendanceStatus = 'present' | 'late' | 'outside_radius';
 
@@ -27,11 +27,14 @@ export interface Attendance {
   user_id: string;
   check_in_time: string;
   check_out_time: string | null;
+  check_in_latitude: number;
+  check_in_longitude: number;
+  check_out_latitude?: number | null;
+  check_out_longitude?: number | null;
   is_valid: boolean;
+  is_mocked: boolean;
   distance_from_office: number;
   status: AttendanceStatus;
-  latitude: number;
-  longitude: number;
   created_at: string;
   updated_at: string;
 }

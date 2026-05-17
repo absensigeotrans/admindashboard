@@ -18,7 +18,6 @@ class AuthService extends ChangeNotifier {
       _fetchProfile();
     }
     
-    // Listen for auth state changes
     _supabase.auth.onAuthStateChange.listen((data) {
       _user = data.session?.user;
       if (_user != null) {
@@ -44,6 +43,10 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshProfile() async {
+    await _fetchProfile();
+  }
+
   Future<String?> signUp({
     required String email,
     required String password,
@@ -55,7 +58,7 @@ class AuthService extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final response = await _supabase.auth.signUp(
+      await _supabase.auth.signUp(
         email: email,
         password: password,
         data: {
@@ -68,7 +71,7 @@ class AuthService extends ChangeNotifier {
       
       _isLoading = false;
       notifyListeners();
-      return null; // Success
+      return null;
     } on AuthException catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -93,7 +96,71 @@ class AuthService extends ChangeNotifier {
       );
       _isLoading = false;
       notifyListeners();
-      return null; // Success
+      return null;
+    } on AuthException catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.message;
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.toString();
+    }
+  }
+
+  Future<String?> resetPassword(String email) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase.auth.resetPasswordForEmail(email);
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    } on AuthException catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.message;
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.toString();
+    }
+  }
+
+  Future<String?> updateProfile({
+    String? fullName,
+    String? employeeId,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final updates = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (fullName != null) updates['full_name'] = fullName;
+      if (employeeId != null) updates['employee_id'] = employeeId;
+
+      await _supabase.from('profiles').update(updates).eq('id', _user!.id);
+      await _fetchProfile();
+
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.toString();
+    }
+  }
+
+  Future<String?> changePassword(String newPassword) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+      _isLoading = false;
+      notifyListeners();
+      return null;
     } on AuthException catch (e) {
       _isLoading = false;
       notifyListeners();

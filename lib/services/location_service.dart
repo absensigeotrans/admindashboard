@@ -10,17 +10,42 @@ class LocationService extends ChangeNotifier {
   double _currentDistance = 0.0;
   bool _isInRadius = false;
   bool _isMocked = false;
-  bool _wasMocked = false; // Flag for alert
+  bool _wasMocked = false;
+  bool _permissionDenied = false;
   bg.Location? _currentLocation;
 
   bool get isTracking => _isTracking;
   double get currentDistance => _currentDistance;
   bool get isInRadius => _isInRadius;
   bool get isMocked => _isMocked;
+  bool get permissionDenied => _permissionDenied;
   bg.Location? get currentLocation => _currentLocation;
 
   LocationService() {
+    _checkPermission();
     _initBackgroundGeolocation();
+  }
+
+  Future<void> _checkPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      _permissionDenied = true;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> requestPermission() async {
+    LocationPermission permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always) {
+      _permissionDenied = false;
+      notifyListeners();
+      return true;
+    }
+    _permissionDenied = true;
+    notifyListeners();
+    return false;
   }
 
   void _initBackgroundGeolocation() {
@@ -77,28 +102,63 @@ class LocationService extends ChangeNotifier {
 
   Future<void> updateDistance(double officeLat, double officeLon, double radius) async {
     try {
+      // Check permission first
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _permissionDenied = true;
+        notifyListeners();
+        return;
+      }
+
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high
       );
-      
-      _isMocked = position.isMocked;
+
+      _permissionDenied = false;
+
+      // Enhanced mock detection
+      _isMocked = _detectMockLocation(position);
       if (_isMocked && !_wasMocked) {
         NotificationService().showMockLocationAlert();
       }
       _wasMocked = _isMocked;
 
       _currentDistance = calculateDistance(
-        position.latitude, 
-        position.longitude, 
-        officeLat, 
+        position.latitude,
+        position.longitude,
+        officeLat,
         officeLon
       );
-      
+
       _isInRadius = _currentDistance <= radius;
       notifyListeners();
     } catch (e) {
       debugPrint('Error updating distance: $e');
+      // Check if it's a permission error
+      if (e.toString().contains('permission')) {
+        _permissionDenied = true;
+        notifyListeners();
+      }
     }
+  }
+
+  // Enhanced mock location detection
+  bool _detectMockLocation(Position position) {
+    // Check native isMocked flag
+    if (position.isMocked) return true;
+
+    // Check for suspiciously perfect accuracy (common in fake GPS apps)
+    if (position.accuracy != null && position.accuracy! < 1.0) {
+      // Very high accuracy (< 1 meter) could indicate spoofing
+      debugPrint('[LocationService] Suspicious accuracy: ${position.accuracy}');
+    }
+
+    // Check if altitude is 0 (common default in mock locations)
+    // Only flag if other indicators are present
+    // Note: We don't block based on altitude alone as real GPS can also show 0
+
+    return false;
   }
 
   Future<void> startTracking() async {

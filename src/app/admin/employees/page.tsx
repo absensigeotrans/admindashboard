@@ -75,6 +75,7 @@ export default function EmployeesPage() {
     const result = await updateEmployee(editEmployee.id, {
       full_name: editFullName,
       department: editDepartment || undefined,
+      role: editRole,
     });
     if (result.success) {
       toast.success('Employee updated');
@@ -173,6 +174,7 @@ export default function EmployeesPage() {
         <StatsCard icon={<Users className="w-6 h-6" />} value={total} label="Total Employees" color="blue" />
         <StatsCard icon={<UserCog className="w-6 h-6" />} value={employees.filter(e => e.role === 'admin').length} label="Admins" color="purple" />
         <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'employee').length} label="Employees" color="green" />
+        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'driver').length} label="Drivers" color="blue" />
         <StatsCard icon={<Building2 className="w-6 h-6" />} value={departments.length} label="Departments" color="yellow" />
       </div>
 
@@ -218,7 +220,7 @@ export default function EmployeesPage() {
                     <td className="px-4 py-3 text-sm text-gray-600">{emp.department || '—'}</td>
                     <td className="px-4 py-3">
                       <button onClick={() => handleToggleRole(emp)} title="Click to toggle role">
-                        <Badge variant={emp.role === 'admin' ? 'info' : 'default'}>
+                        <Badge variant={emp.role === 'admin' ? 'info' : emp.role === 'driver' ? 'success' : 'default'}>
                           {emp.role}
                         </Badge>
                       </button>
@@ -281,6 +283,17 @@ export default function EmployeesPage() {
               value={editDepartment}
               onChange={(e) => setEditDepartment(e.target.value)}
               placeholder="Leave blank to remove"
+            />
+            <FormSelect
+              label="Role"
+              value={editRole}
+              onChange={(e) => setEditRole(e.target.value as UserRole)}
+              options={[
+                { value: 'employee', label: 'Employee' },
+                { value: 'admin', label: 'Admin' },
+                { value: 'driver', label: 'Driver' },
+                { value: 'inactive', label: 'Inactive' },
+              ]}
             />
             <div className="flex gap-2 pt-2">
               <Button onClick={handleSaveEdit} loading={saving} className="flex-1">

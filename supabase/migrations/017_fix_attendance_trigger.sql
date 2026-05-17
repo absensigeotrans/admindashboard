@@ -1,0 +1,123 @@
+-- Migration 017: Fix validate_attendance_geofence() trigger function
+--
+-- Problem: The trigger function references NEW.latitude and NEW.longitude,
+-- but the actual attendance table columns are:
+--   - check_in_latitude, check_in_longitude (for check-in)
+--   - check_out_latitude, check_out_longitude (for check-out)
+--
+-- This migration recreates the function with correct column names and
+-- handles both INSERT (check-in) and UPDATE (check-out) scenarios.
+
+-- Step 1: Drop the existing trigger
+DROP TRIGGER IF EXISTS validate_geofence_before_insert ON attendance;
+
+-- Step 2: Drop the existing function
+DROP FUNCTION IF EXISTS validate_attendance_geofence();
+
+-- Step 3: Recreate the function with correct column names
+CREATE OR REPLACE FUNCTION validate_attendance_geofence()
+RETURNS TRIGGER AS $$
+DECLARE
+  office_record RECORD;
+  settings_record RECORD;
+  calculated_distance DOUBLE PRECISION;
+  R_EARTH CONSTANT DOUBLE PRECISION := 6371000;
+  d_lat DOUBLE PRECISION;
+  d_lon DOUBLE PRECISION;
+  a DOUBLE PRECISION;
+  c DOUBLE PRECISION;
+  lat DOUBLE PRECISION;
+  lon DOUBLE PRECISION;
+  is_checkout BOOLEAN;
+BEGIN
+  -- Determine if this is a checkout (UPDATE with check_out_time being set)
+  is_checkout := TG_OP = 'UPDATE' AND NEW.check_out_time IS NOT NULL AND OLD.check_out_time IS NULL;
+
+  -- Get office location
+  IF NEW.office_id IS NOT NULL THEN
+    SELECT * INTO office_record FROM offices WHERE id = NEW.office_id;
+  ELSE
+    SELECT * INTO office_record FROM offices LIMIT 1;
+  END IF;
+
+  -- Get settings
+  SELECT * INTO settings_record FROM settings WHERE id = 'app_settings';
+
+  IF office_record IS NULL THEN
+    NEW.is_valid := FALSE;
+    NEW.distance_from_office := NULL;
+    NEW.status := 'outside_radius';
+    RETURN NEW;
+  END IF;
+
+  -- Use correct columns based on check-in vs check-out
+  IF is_checkout THEN
+    lat := NEW.check_out_latitude;
+    lon := NEW.check_out_longitude;
+  ELSE
+    lat := NEW.check_in_latitude;
+    lon := NEW.check_in_longitude;
+  END IF;
+
+  -- Skip validation if coordinates are null
+  IF lat IS NULL OR lon IS NULL THEN
+    NEW.is_valid := NULL;
+    NEW.distance_from_office := NULL;
+    NEW.status := NULL;
+    RETURN NEW;
+  END IF;
+
+  -- Haversine formula calculation
+  d_lat := RADIANS(lat - office_record.latitude);
+  d_lon := RADIANS(lon - office_record.longitude);
+  a := SIN(d_lat/2) * SIN(d_lat/2) +
+       COS(RADIANS(office_record.latitude)) * COS(RADIANS(lat)) *
+       SIN(d_lon/2) * SIN(d_lon/2);
+  c := 2 * ATAN2(SQRT(a), SQRT(1-a));
+  calculated_distance := R_EARTH * c;
+
+  NEW.distance_from_office := calculated_distance;
+
+  -- Use settings radius if available, fallback to office radius
+  IF settings_record IS NOT NULL AND settings_record.default_geofence_radius IS NOT NULL THEN
+    IF calculated_distance <= settings_record.default_geofence_radius THEN
+      NEW.is_valid := TRUE;
+      IF is_checkout THEN
+        NEW.status := 'present';
+      ELSIF EXTRACT(HOUR FROM NEW.check_in_time) > settings_record.late_threshold_hour
+         OR (EXTRACT(HOUR FROM NEW.check_in_time) = settings_record.late_threshold_hour
+             AND EXTRACT(MINUTE FROM NEW.check_in_time) >= settings_record.late_threshold_minute)
+      THEN
+        NEW.status := 'late';
+      ELSE
+        NEW.status := 'present';
+      END IF;
+    ELSE
+      NEW.is_valid := FALSE;
+      NEW.status := 'outside_radius';
+    END IF;
+  ELSE
+    IF calculated_distance <= office_record.geofence_radius THEN
+      NEW.is_valid := TRUE;
+      IF is_checkout THEN
+        NEW.status := 'present';
+      ELSIF EXTRACT(HOUR FROM NEW.check_in_time) >= 9 THEN
+        NEW.status := 'late';
+      ELSE
+        NEW.status := 'present';
+      END IF;
+    ELSE
+      NEW.is_valid := FALSE;
+      NEW.status := 'outside_radius';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Step 4: Recreate the trigger for both INSERT and UPDATE
+CREATE TRIGGER validate_geofence_before_insert
+  BEFORE INSERT OR UPDATE ON attendance
+  FOR EACH ROW
+  EXECUTE FUNCTION validate_attendance_geofence();

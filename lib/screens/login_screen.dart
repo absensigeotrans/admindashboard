@@ -49,13 +49,61 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } else {
-      // Tanya user apakah mau aktifkan biometric jika belum aktif
       if (!_isBiometricEnabled) {
         _showBiometricDialog();
       } else {
         if (mounted) Navigator.pop(context);
       }
     }
+  }
+
+  void _showForgotPasswordDialog() {
+    final emailCtrl = TextEditingController(text: _emailController.text.trim());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Masukkan email Anda. Kami akan mengirimkan link reset password.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(Icons.email_outlined),
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () async {
+              final email = emailCtrl.text.trim();
+              if (email.isEmpty) return;
+              final authService = Provider.of<AuthService>(context, listen: false);
+              final err = await authService.resetPassword(email);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  err == null
+                      ? const SnackBar(
+                          content: Text('Link reset password telah dikirim ke email Anda'),
+                          backgroundColor: Colors.green,
+                        )
+                      : SnackBar(content: Text('Gagal: $err'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: const Text('Kirim'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleBiometricLogin() async {
@@ -164,7 +212,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 border: const OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _showForgotPasswordDialog,
+                child: const Text('Lupa Password?', style: TextStyle(fontSize: 13)),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(

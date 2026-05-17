@@ -7,7 +7,7 @@ import { Building2, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LoginPage() {
-  const { user, signIn, signUp, loading: authLoading } = useAuth();
+  const { user, profile, signIn, signUp, loading: authLoading } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,10 +17,13 @@ export default function LoginPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    if (user && typeof window !== 'undefined') {
-      window.location.href = '/';
+    if (authLoading) return;
+    if (user && profile && typeof window !== 'undefined') {
+      if (profile.role === 'admin') {
+        window.location.href = '/admin';
+      }
     }
-  }, [user]);
+  }, [user, profile, authLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

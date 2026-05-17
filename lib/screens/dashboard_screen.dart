@@ -1,14 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/location_service.dart';
+import '../services/office_service.dart';
 import '../services/sync_service.dart';
 import '../services/notification_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'history_screen.dart';
 import 'leave_request_screen.dart';
+import 'statistics_screen.dart';
+import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -19,36 +25,81 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final MapController _mapController = MapController();
-  final double _officeLat = -6.2088; // Koordinat Kantor Pusat PTK (Seed Data)
-  final double _officeLon = 106.8456;
-  final double _radius = 100.0;
+
+  double _officeLat = -6.2088;
+  double _officeLon = 106.8456;
+  double _radius = 100.0;
 
   bool _isProcessing = false;
   Map<String, dynamic>? _todayAttendance;
-  int? _localAttendanceId; // ID absensi dari SQLite (kalau offline)
+  int? _localAttendanceId;
+  bool _isLocationReady = false;
+  Timer? _distanceUpdateTimer;
 
   @override
   void initState() {
     super.initState();
+    _loadOffice();
     _fetchTodayAttendance();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startDistanceUpdate();
+      _checkAndRequestPermission();
     });
   }
 
-  void _startDistanceUpdate() async {
+  Future<void> _checkAndRequestPermission() async {
     final locationService = Provider.of<LocationService>(context, listen: false);
-    while (mounted) {
+
+    if (locationService.permissionDenied) {
+      final granted = await locationService.requestPermission();
+      if (!granted && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Izin lokasi diperlukan untuk absensi'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+
+    if (mounted) {
+      _startDistanceUpdate();
+    }
+  }
+
+  Future<void> _loadOffice() async {
+    final officeService = Provider.of<OfficeService>(context, listen: false);
+    await officeService.fetchOffice();
+    if (officeService.isReady && mounted) {
+      setState(() {
+        _officeLat = officeService.latitude!;
+        _officeLon = officeService.longitude!;
+        _radius = officeService.radius!;
+      });
+      _mapController.move(LatLng(_officeLat, _officeLon), 15.0);
+    }
+  }
+
+  void _startDistanceUpdate() {
+    _distanceUpdateTimer?.cancel();
+    _distanceUpdateTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      final locationService = Provider.of<LocationService>(context, listen: false);
       await locationService.updateDistance(_officeLat, _officeLon, _radius);
-      if (locationService.currentLocation != null) {
+
+      if (locationService.currentLocation != null && mounted) {
+        setState(() => _isLocationReady = true);
         _mapController.move(
           LatLng(locationService.currentLocation!.coords.latitude,
                  locationService.currentLocation!.coords.longitude),
           15.0
         );
       }
-      await Future.delayed(const Duration(seconds: 10));
-    }
+    });
   }
 
   Future<void> _fetchTodayAttendance() async {
@@ -59,34 +110,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final today = DateTime.now().toIso8601String().substring(0, 10);
 
     try {
-      // 1. Cek di Supabase (synced)
-      final synced = await supabase
+      final results = await supabase
           .from('attendance')
           .select()
           .eq('user_id', user.id)
           .gte('check_in_time', '$today 00:00:00')
           .lte('check_in_time', '$today 23:59:59')
-          .maybeSingle();
+          .order('check_in_time', ascending: false)
+          .limit(1);
+
+      final synced = results.isNotEmpty ? results.first : null;
 
       if (synced != null) {
+        // Check if already checked out
+        final hasCheckout = synced['check_out_time'] != null;
         if (mounted) {
           setState(() {
-            _todayAttendance = synced;
+            _todayAttendance = hasCheckout ? null : synced;
             _localAttendanceId = null;
           });
         }
         return;
       }
 
-      // 2. Cek di SQLite local (pending sync)
       final syncService = Provider.of<SyncService>(context, listen: false);
       final localData = await syncService.getTodayAttendance(user.id);
 
       if (localData.isNotEmpty) {
+        // Check if local record already has checkout
+        final firstRecord = localData.first;
+        final hasCheckout = firstRecord['check_out_time'] != null;
         if (mounted) {
           setState(() {
-            _todayAttendance = localData.first;
-            _localAttendanceId = localData.first['local_id'] as int?;
+            _todayAttendance = hasCheckout ? null : firstRecord;
+            _localAttendanceId = hasCheckout ? null : (firstRecord['local_id'] as int?);
           });
         }
       } else {
@@ -108,6 +165,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final supabase = Supabase.instance.client;
     final locationService = Provider.of<LocationService>(context, listen: false);
     final syncService = Provider.of<SyncService>(context, listen: false);
+    final authService = Provider.of<AuthService>(context, listen: false);
     final user = supabase.auth.currentUser;
 
     if (user == null) {
@@ -115,57 +173,102 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    final now = DateTime.now();
-    final coords = locationService.currentLocation?.coords;
+    // Check if user is driver (driver can check in from anywhere)
+    final role = authService.profile?['role'] ?? '';
+    final isDriver = role == 'driver';
 
-    try {
-      if (_todayAttendance == null) {
-        // ── CHECK-IN ──
-        if (syncService.isOnline) {
-          // Online: insert langsung ke Supabase
-          await supabase.from('attendance').insert({
-            'user_id': user.id,
-            'check_in_time': now.toIso8601String(),
-            'check_in_latitude': coords?.latitude,
-            'check_in_longitude': coords?.longitude,
-            'is_mocked': locationService.isMocked,
-            'distance_from_office': locationService.currentDistance,
-          });
-          NotificationService().showCheckInSuccess();
-        } else {
-          // Offline: simpan ke SQLite
-          await syncService.saveAttendanceOffline(
-            userId: user.id,
-            checkInTime: now,
-            checkInLatitude: coords?.latitude ?? 0,
-            checkInLongitude: coords?.longitude ?? 0,
-            checkInDistance: locationService.currentDistance,
-            isMocked: locationService.isMocked,
-          );
-        }
+    // Check if location is ready (skip for drivers)
+    final coords = locationService.currentLocation?.coords;
+    if (coords == null && !isDriver && !locationService.isMocked) {
+      // Try to get current position as fallback (except for drivers)
+      await locationService.updateDistance(_officeLat, _officeLon, _radius);
+      if (locationService.currentLocation == null) {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lokasi tidak tersedia. Mohon aktifkan GPS.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    return;
+  }
+}
+
+final now = DateTime.now();
+final currentCoords = locationService.currentLocation?.coords;
+
+try {
+  if (_todayAttendance != null) {
+    // CHECK-OUT
+    if (syncService.isOnline) {
+      if (_localAttendanceId != null) {
+        await syncService.updateAttendanceOffline(
+          localId: _localAttendanceId!,
+          checkOutTime: now,
+          checkOutLatitude: currentCoords?.latitude ?? 0,
+          checkOutLongitude: currentCoords?.longitude ?? 0,
+        );
       } else {
-        // ── CHECK-OUT ──
-        if (_localAttendanceId != null) {
-          // Ada di local SQLite → update local & sync
-          await syncService.updateAttendanceOffline(
-            localId: _localAttendanceId!,
-            checkOutTime: now,
-            checkOutLatitude: coords?.latitude ?? 0,
-            checkOutLongitude: coords?.longitude ?? 0,
-          );
-        } else if (syncService.isOnline) {
-          // Online & ada di Supabase → update Supabase
-          await supabase.from('attendance').update({
-            'check_out_time': now.toIso8601String(),
-            'check_out_latitude': coords?.latitude,
-            'check_out_longitude': coords?.longitude,
-          }).eq('id', _todayAttendance!['id']);
+        final result = await supabase.from('attendance').update({
+          'check_out_time': now.toIso8601String(),
+          'check_out_latitude': currentCoords?.latitude,
+          'check_out_longitude': currentCoords?.longitude,
+        }).eq('id', _todayAttendance!['id']).select('status').maybeSingle();
+
+        if (result != null && mounted) {
+          await _showCheckOutResultDialog(result['status']);
         }
         NotificationService().showCheckOutSuccess();
       }
+    } else {
+      if (_localAttendanceId != null) {
+        await syncService.updateAttendanceOffline(
+          localId: _localAttendanceId!,
+          checkOutTime: now,
+          checkOutLatitude: currentCoords?.latitude ?? 0,
+          checkOutLongitude: currentCoords?.longitude ?? 0,
+        );
+      }
+    }
+  } else {
+    // CHECK-IN
+    String? officeId;
+    if (syncService.isOnline) {
+      final officeData = await supabase.from('offices').select('id').limit(1).maybeSingle();
+      officeId = officeData?['id'];
+    }
 
-      await _fetchTodayAttendance();
-    } catch (e) {
+    if (syncService.isOnline) {
+      final result = await supabase.from('attendance').insert({
+        'user_id': user.id,
+        'check_in_time': now.toIso8601String(),
+        'check_in_latitude': currentCoords?.latitude,
+        'check_in_longitude': currentCoords?.longitude,
+        'is_mocked': locationService.isMocked,
+        'distance_from_office': locationService.currentDistance,
+        'office_id': officeId,
+      }).select('status').maybeSingle();
+
+      if (result != null && mounted) {
+        await _showCheckInResultDialog(result['status']);
+      }
+      NotificationService().showCheckInSuccess();
+    } else {
+      await syncService.saveAttendanceOffline(
+        userId: user.id,
+        checkInTime: now,
+        checkInLatitude: currentCoords?.latitude ?? 0,
+        checkInLongitude: currentCoords?.longitude ?? 0,
+        checkInDistance: locationService.currentDistance,
+        isMocked: locationService.isMocked,
+      );
+    }
+  }
+
+  await _fetchTodayAttendance();
+} catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
@@ -176,6 +279,150 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _showCheckInResultDialog(String status) async {
+    String title;
+    String message;
+    Color color;
+    IconData icon;
+
+    switch (status) {
+      case 'present':
+        title = 'Tepat Waktu';
+        message = '✅ Anda check-in tepat waktu. Selamat bekerja!';
+        color = Colors.green;
+        icon = Icons.check_circle;
+        break;
+      case 'late':
+        title = 'Terlambat';
+        message = '⚠️ Anda check-in setelah jam 09:00.';
+        color = Colors.orange;
+        icon = Icons.access_time;
+        break;
+      case 'outside_radius':
+        title = 'Di Luar Area';
+        message = '📍 Lokasi Anda di luar area kantor. Absensi tetap tercatat.';
+        color = Colors.blue;
+        icon = Icons.location_off;
+        break;
+      default:
+        title = 'Absensi Berhasil';
+        message = '✅ Check-in berhasil.';
+        color = Colors.green;
+        icon = Icons.check;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 64, color: color),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Waktu: ${DateTime.now().toString().substring(11, 16)}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCheckOutResultDialog(String status) async {
+    String title;
+    String message;
+    Color color;
+    IconData icon;
+
+    switch (status) {
+      case 'present':
+        title = 'Check-Out Berhasil';
+        message = '✅ Anda check-out tepat waktu.';
+        color = Colors.green;
+        icon = Icons.check_circle;
+        break;
+      case 'late':
+        title = 'Check-Out Berhasil';
+        message = '⚠️ Check-out terlambat (masuk terlambat).';
+        color = Colors.orange;
+        icon = Icons.access_time;
+        break;
+      case 'outside_radius':
+        title = 'Check-Out Berhasil';
+        message = '📍 Check-out berhasil (di luar area kantor).';
+        color = Colors.blue;
+        icon = Icons.location_off;
+        break;
+      default:
+        title = 'Check-Out Berhasil';
+        message = '✅ Check-out berhasil.';
+        color = Colors.green;
+        icon = Icons.check;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 64, color: color),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Waktu: ${DateTime.now().toString().substring(11, 16)}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -184,7 +431,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final role = authService.profile?['role'] ?? '';
     final isDriver = role == 'driver';
-    final canAttend = (locationService.isInRadius || isDriver) && !locationService.isMocked;
+    final hasLocation = locationService.currentLocation != null || isDriver;
+    // Drivers can attend from anywhere (no radius check needed)
+    final canAttend = hasLocation && (locationService.isInRadius || isDriver) && !locationService.isMocked;
 
     return Scaffold(
       appBar: AppBar(
@@ -207,6 +456,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Statistik Bulanan',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const StatisticsScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Profil Saya',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => authService.signOut(),
           )
@@ -214,8 +479,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Column(
         children: [
-          // ── Offline Banner ──
-          if (!syncService.isOnline)
+          if (locationService.permissionDenied)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: Colors.red.shade700,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.location_off, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Izin Lokasi Ditolak',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () async {
+                      final granted = await locationService.requestPermission();
+                      if (!granted && mounted) {
+                        // Open app settings
+                        await Geolocator.openAppSettings();
+                      }
+                    },
+                    child: const Text(
+                      'AKTIFKAN',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (!syncService.isOnline)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -268,7 +563,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-          // Map Section
           Expanded(
             flex: 3,
             child: FlutterMap(
@@ -316,7 +610,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
 
-          // Info Section
           Expanded(
             flex: 2,
             child: Container(
@@ -360,6 +653,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                             ),
+                          if (locationService.permissionDenied)
+                            Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                '⚠️ Izin Ditolak',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red),
+                              ),
+                            ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
@@ -393,16 +699,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? null
                           : _handleAttendance,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _todayAttendance == null
-                            ? const Color(0xFF005494)
-                            : Colors.orange,
+                        backgroundColor: _todayAttendance != null
+                            ? Colors.orange
+                            : const Color(0xFF005494),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: _isProcessing
                           ? const CircularProgressIndicator(color: Colors.white)
                           : Text(
-                              _todayAttendance == null ? 'CHECK-IN SEKARANG' : 'CHECK-OUT SEKARANG',
+                              _todayAttendance != null
+                                  ? 'CHECK-OUT SEKARANG'
+                                  : 'CHECK-IN SEKARANG',
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                     ),
@@ -414,5 +722,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _distanceUpdateTimer?.cancel();
+    _mapController.dispose();
+    super.dispose();
   }
 }

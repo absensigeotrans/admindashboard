@@ -227,7 +227,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 const SizedBox(width: 12),
                 _SummaryCard(
                   title: 'Terlambat',
-                  value: '0',
+                  value: '${_attendanceList.where((a) => a['status'] == 'late').length}',
                   icon: Icons.warning,
                   color: Colors.orange,
                 ),

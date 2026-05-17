@@ -8,6 +8,7 @@ import 'services/sync_service.dart';
 import 'services/database_helper.dart';
 import 'services/leave_service.dart';
 import 'services/notification_service.dart';
+import 'services/office_service.dart';
 import 'screens/shift_selection_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -35,6 +36,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AdminService()),
         ChangeNotifierProvider(create: (_) => SyncService()),
         ChangeNotifierProvider(create: (_) => LeaveService()),
+        ChangeNotifierProvider(create: (_) => OfficeService()),
       ],
       child: const MyApp(),
     ),

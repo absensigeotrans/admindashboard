@@ -108,11 +108,12 @@ export function useReports() {
     const present = data.filter((r) => r.status === 'present').length;
     const late = data.filter((r) => r.status === 'late').length;
     const outside = data.filter((r) => r.status === 'outside_radius').length;
+    const suspicious = data.filter((r) => r.is_mocked).length;
     const avgDistance = total > 0
       ? data.reduce((sum, r) => sum + r.distance_from_office, 0) / total
       : 0;
 
-    return { total, present, late, outside, avgDistance };
+    return { total, present, late, outside, suspicious, avgDistance };
   }, []);
 
   return {

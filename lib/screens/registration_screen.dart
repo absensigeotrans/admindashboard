@@ -18,7 +18,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _passwordController = TextEditingController();
   
   String _selectedRole = 'juru_parkir';
-  final List<String> _roles = ['driver', 'juru_parkir', 'ob', 'admin'];
+  final List<String> _roles = ['driver', 'juru_parkir', 'ob'];
 
   void _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;

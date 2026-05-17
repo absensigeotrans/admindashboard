@@ -180,38 +180,35 @@ class SyncService extends ChangeNotifier {
 
         try {
           // Check if already exists in Supabase (by check_in_time + user_id)
-          if (checkOutTime != null) {
-            // Full attendance record
-            await _supabase.from('attendance').upsert({
+          final existing = await _supabase
+              .from('attendance')
+              .select('id')
+              .eq('user_id', item['user_id'])
+              .eq('check_in_time', item['check_in_time'])
+              .maybeSingle();
+
+          if (existing != null) {
+            // Update existing record with check-out data if available
+            if (checkOutTime != null) {
+              await _supabase.from('attendance').update({
+                'check_out_time': item['check_out_time'],
+                'check_out_latitude': item['check_out_latitude'],
+                'check_out_longitude': item['check_out_longitude'],
+              }).eq('id', existing['id']);
+            }
+          } else {
+            // Insert new record
+            await _supabase.from('attendance').insert({
               'user_id': item['user_id'],
               'check_in_time': item['check_in_time'],
               'check_in_latitude': item['check_in_latitude'],
               'check_in_longitude': item['check_in_longitude'],
-              'check_out_time': item['check_out_time'],
-              'check_out_latitude': item['check_out_latitude'],
-              'check_out_longitude': item['check_out_longitude'],
+              'check_out_time': checkOutTime,
+              'check_out_latitude': checkOutTime != null ? item['check_out_latitude'] : null,
+              'check_out_longitude': checkOutTime != null ? item['check_out_longitude'] : null,
               'is_mocked': item['is_mocked'] == 1,
               'distance_from_office': item['distance_from_office'],
-            }, onConflict: 'user_id,check_in_time');
-          } else {
-            // Check-in only
-            final existing = await _supabase
-                .from('attendance')
-                .select()
-                .eq('user_id', item['user_id'])
-                .eq('check_in_time', item['check_in_time'])
-                .maybeSingle();
-
-            if (existing == null) {
-              await _supabase.from('attendance').insert({
-                'user_id': item['user_id'],
-                'check_in_time': item['check_in_time'],
-                'check_in_latitude': item['check_in_latitude'],
-                'check_in_longitude': item['check_in_longitude'],
-                'is_mocked': item['is_mocked'] == 1,
-                'distance_from_office': item['distance_from_office'],
-              });
-            }
+            });
           }
 
           await _db.markAttendanceSynced(id);

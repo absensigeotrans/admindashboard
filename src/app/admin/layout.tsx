@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Sidebar, MobileMenuButton } from '@/components/admin/Sidebar';
 import { ToastContainer } from '@/components/ui/Toast';
+import { AlertTriangle } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, loading: authLoading } = useAuth();
@@ -11,7 +12,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || profile?.role !== 'admin') {
+    if (!user) {
       window.location.href = '/login';
     }
   }, [user, profile, authLoading]);
@@ -24,7 +25,48 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!user || profile?.role !== 'admin') return null;
+  if (!user) return null;
+
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-white rounded-2xl shadow-lg border p-8 max-w-md text-center">
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Profile Not Found</h2>
+          <p className="text-gray-600 mb-6">
+            Your account profile was not created. This usually happens when the signup trigger failed.
+            Please create a new account or contact the administrator.
+          </p>
+          <button
+            onClick={() => { window.location.href = '/login'; }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (profile.role !== 'admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-white rounded-2xl shadow-lg border p-8 max-w-md text-center">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-6">
+            You do not have admin access. Only admin users can access this panel.
+          </p>
+          <button
+            onClick={() => { window.location.href = '/login'; }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
