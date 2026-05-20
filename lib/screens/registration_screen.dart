@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 
 class RegistrationScreen extends StatefulWidget {
-  final String shiftType;
-  const RegistrationScreen({super.key, required this.shiftType});
+  final String? shiftType;
+  const RegistrationScreen({super.key, this.shiftType});
 
   @override
   State<RegistrationScreen> createState() => _RegistrationScreenState();
@@ -30,7 +30,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       fullName: _nameController.text.trim(),
       employeeId: _employeeIdController.text.trim(),
       role: _selectedRole,
-      shiftType: widget.shiftType,
+      shiftType: widget.shiftType ?? '',
     );
 
     if (error != null) {

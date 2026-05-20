@@ -223,6 +223,18 @@ class NotificationService {
     );
   }
 
+  // ─── Late Attendance Notifications ───
+
+  Future<void> showLateNotification(String lateThreshold) async {
+    await _show(
+      id: 1004,
+      channel: _channelAttendance,
+      title: '⚠️ Anda Terlambat',
+      body: 'Check-in setelah jam $lateThreshold. Keterlambatan telah dicatat.',
+      importance: Importance.high,
+    );
+  }
+
   // ─── Security Notifications ───
 
   Future<void> showMockLocationAlert() async {

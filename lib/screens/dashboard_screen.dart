@@ -10,6 +10,7 @@ import '../services/location_service.dart';
 import '../services/office_service.dart';
 import '../services/sync_service.dart';
 import '../services/notification_service.dart';
+import '../services/shift_schedule_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'history_screen.dart';
 import 'leave_request_screen.dart';
@@ -35,15 +36,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int? _localAttendanceId;
   bool _isLocationReady = false;
   Timer? _distanceUpdateTimer;
+  String _todayShift = '';
 
   @override
   void initState() {
     super.initState();
     _loadOffice();
+    _loadUserData();
     _fetchTodayAttendance();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndRequestPermission();
     });
+  }
+
+  Future<void> _loadUserData() async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    if (user != null && mounted) {
+      final shiftService = ShiftScheduleService();
+      final todayShift = await shiftService.getTodayShift(user.id);
+      if (mounted) {
+        setState(() {
+          _todayShift = todayShift ?? '';
+        });
+      }
+    }
   }
 
   Future<void> _checkAndRequestPermission() async {
@@ -100,6 +117,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       }
     });
+  }
+
+  // Check if Juru Parkir has selected shift for today
+  Future<bool> _checkJuruParkirShift(String userId) async {
+    final shiftService = ShiftScheduleService();
+    final hasShift = await shiftService.hasSelectedShiftToday(userId);
+    return hasShift;
+  }
+
+  // Show shift selection dialog for Juru Parkir
+  Future<void> _showShiftSelectionDialog(String userId) async {
+    final shiftService = ShiftScheduleService();
+    String? selectedShift;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Pilih Shift Hari Ini'),
+        content: const Text(
+          'Untuk role Juru Parkir, Anda wajib memilih shift sebelum melakukan absensi.',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    selectedShift = 'morning';
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF005494),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Column(
+                    children: [
+                      Text('Shift Pagi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('06:00 - 14:00', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    selectedShift = 'afternoon';
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Column(
+                    children: [
+                      Text('Shift Siang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('10:00 - 18:00', style: const TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (selectedShift != null) {
+      await shiftService.selectShift(userId, selectedShift!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Shift ${selectedShift == 'morning' ? 'Pagi' : 'Siang'} dipilih!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _fetchTodayAttendance() async {
@@ -176,6 +275,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Check if user is driver (driver can check in from anywhere)
     final role = authService.profile?['role'] ?? '';
     final isDriver = role == 'driver';
+    final isJuruParkir = role == 'juru_parkir';
+
+    // For Juru Parkir, check if shift has been selected for today
+    if (isJuruParkir && _todayAttendance == null) {
+      final hasShift = await _checkJuruParkirShift(user.id);
+      if (!hasShift && mounted) {
+        await _showShiftSelectionDialog(user.id);
+        // After selection, check again
+        final stillNoShift = await _checkJuruParkirShift(user.id);
+        if (stillNoShift) {
+          // User didn't select shift, cancel check-in
+          setState(() => _isProcessing = false);
+          return;
+        }
+      }
+    }
 
     // Check if location is ready (skip for drivers)
     final coords = locationService.currentLocation?.coords;
@@ -285,6 +400,21 @@ try {
     Color color;
     IconData icon;
 
+    // Get user's shift for today to determine late threshold
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    final shiftService = ShiftScheduleService();
+    final userShift = user != null ? await shiftService.getTodayShift(user.id) : null;
+
+    // Determine late threshold based on shift type
+    String lateThresholdMsg;
+    if (userShift == 'afternoon') {
+      lateThresholdMsg = '11:00 WIB (Shift Siang)';
+    } else {
+      // Default to morning shift or unspecified
+      lateThresholdMsg = '07:00 WIB (Shift Pagi)';
+    }
+
     switch (status) {
       case 'present':
         title = 'Tepat Waktu';
@@ -293,10 +423,12 @@ try {
         icon = Icons.check_circle;
         break;
       case 'late':
-        title = 'Terlambat';
-        message = '⚠️ Anda check-in setelah jam 09:00.';
+        title = '⚠️ Terlambat';
+        message = 'Anda check-in setelah jam $lateThresholdMsg.\n迟到 (Terlambat)';
         color = Colors.orange;
-        icon = Icons.access_time;
+        icon = Icons.access_time_filled;
+        // Show late notification
+        NotificationService().showLateNotification(lateThresholdMsg);
         break;
       case 'outside_radius':
         title = 'Di Luar Area';
@@ -673,8 +805,8 @@ try {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              isDriver 
-                                ? 'Bebas Area (Driver)' 
+                              isDriver
+                                ? 'Bebas Area (Driver)'
                                 : (locationService.isInRadius ? 'Dalam Area' : 'Di Luar Area'),
                               style: TextStyle(
                                 color: (locationService.isInRadius || isDriver) ? Colors.green[800] : Colors.red[800],
@@ -686,6 +818,52 @@ try {
                       ),
                     ],
                   ),
+                  // Show shift info for Juru Parkir
+                  if (role == 'juru_parkir')
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _todayShift.isEmpty
+                            ? Colors.yellow[100]
+                            : (_todayShift == 'morning' ? Colors.blue[100] : Colors.orange[100]),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.schedule,
+                            size: 16,
+                            color: _todayShift.isEmpty
+                                ? Colors.orange
+                                : (_todayShift == 'morning' ? Colors.blue[800] : Colors.orange[800]),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _todayShift.isEmpty
+                                ? 'Shift: Belum Pilih'
+                                : 'Shift ${_todayShift == 'morning' ? 'Pagi' : 'Siang'}',
+                            style: TextStyle(
+                              color: _todayShift.isEmpty
+                                  ? Colors.orange
+                                  : (_todayShift == 'morning' ? Colors.blue[800] : Colors.orange[800]),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          if (_todayShift.isNotEmpty) ...[
+                            Text(
+                              ' • Batas ${_todayShift == 'morning' ? '07:00' : '11:00'}',
+                              style: TextStyle(
+                                color: _todayShift == 'morning' ? Colors.blue[600] : Colors.orange[600],
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   if (locationService.isMocked)
                     const Text(
                       '⚠️ Fake GPS Terdeteksi! Absensi Dinonaktifkan.',

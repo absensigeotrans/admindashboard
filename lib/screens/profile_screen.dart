@@ -146,7 +146,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final email = auth.user?.email ?? '';
     final role = p?['role'] ?? '';
     final shiftType = p?['shift_type'] ?? '';
-    final department = p?['department'] ?? '';
 
     return Scaffold(
       appBar: AppBar(
@@ -196,7 +195,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 16),
                         _InfoRow(icon: Icons.badge_outlined, label: 'NIK', value: p?['employee_id'] ?? '—'),
-                        _InfoRow(icon: Icons.business, label: 'Departemen', value: department.toString().isEmpty ? '—' : department.toString()),
                         _InfoRow(icon: Icons.calendar_today, label: 'Bergabung', value: p?['created_at'] != null ? (p!['created_at'] as String).substring(0, 10) : '—'),
 
                         const SizedBox(height: 20),

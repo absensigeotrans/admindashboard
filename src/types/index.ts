@@ -1,4 +1,6 @@
-export type UserRole = 'employee' | 'admin' | 'driver' | 'inactive';
+export type UserRole = 'admin' | 'viewer' | 'driver' | 'juru_parkir' | 'ob' | 'inactive';
+
+export type ShiftType = 'morning' | 'afternoon';
 
 export type AttendanceStatus = 'present' | 'late' | 'outside_radius';
 
@@ -7,7 +9,9 @@ export interface Profile {
   email: string;
   full_name: string;
   role: UserRole;
-  department: string | null;
+  shift_type?: ShiftType | null;
+  employee_id?: string;
+  nik?: string;
   created_at: string;
   updated_at: string;
 }
@@ -18,6 +22,8 @@ export interface Office {
   latitude: number;
   longitude: number;
   geofence_radius: number;
+  address?: string;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -25,18 +31,28 @@ export interface Office {
 export interface Attendance {
   id: string;
   user_id: string;
+  shift_id?: string;
+  office_id?: string;
   check_in_time: string;
-  check_out_time: string | null;
   check_in_latitude: number;
   check_in_longitude: number;
+  check_in_location_data?: Record<string, unknown>;
+  check_out_time?: string | null;
   check_out_latitude?: number | null;
   check_out_longitude?: number | null;
+  check_out_location_data?: Record<string, unknown>;
   is_valid: boolean;
   is_mocked: boolean;
   distance_from_office: number;
   status: AttendanceStatus;
   created_at: string;
   updated_at: string;
+  // Relations (from Supabase join)
+  profiles?: Profile;
+  shifts?: { name: string; code: string };
+  offices?: Office;
+  // Computed fields
+  shift_type?: ShiftType | null;
 }
 
 export interface AttendanceLog {
@@ -51,7 +67,6 @@ export interface AttendanceWithUser extends Attendance {
   user: {
     full_name: string;
     email: string;
-    department: string | null;
   };
 }
 

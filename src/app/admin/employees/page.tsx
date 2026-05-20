@@ -12,15 +12,15 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { FormInput, FormSelect } from '@/components/ui/FormInput';
 import { toast } from '@/components/ui/Toast';
-import { Profile, UserRole } from '@/types';
-import { Users, Building2, UserCog, Download } from 'lucide-react';
+import { Profile, UserRole, ShiftType } from '@/types';
+import { Users, Building2, UserCog, Download, Clock, UserPlus } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
 export default function EmployeesPage() {
   const {
     employees, loading, fetchEmployees, updateEmployee,
-    toggleRole, deactivateEmployee, activateEmployee, getDepartments,
+    toggleRole, deactivateEmployee, activateEmployee, createEmployee,
   } = useEmployees();
   const { offices } = useOffices();
 
@@ -31,8 +31,8 @@ export default function EmployeesPage() {
   // Edit modal
   const [editEmployee, setEditEmployee] = useState<Profile | null>(null);
   const [editFullName, setEditFullName] = useState('');
-  const [editDepartment, setEditDepartment] = useState('');
-  const [editRole, setEditRole] = useState<UserRole>('employee');
+  const [editRole, setEditRole] = useState<UserRole>('viewer');
+  const [editShift, setEditShift] = useState<ShiftType | ''>('');
   const [saving, setSaving] = useState(false);
 
   // Detail modal
@@ -43,8 +43,19 @@ export default function EmployeesPage() {
   const [confirmAction, setConfirmAction] = useState<{
     employee: Profile;
     action: 'deactivate' | 'activate';
-    originalRole: 'employee' | 'admin';
+    originalRole: UserRole;
   } | null>(null);
+
+  // Add Employee modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addFullName, setAddFullName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
+  const [addPassword, setAddPassword] = useState('');
+  const [addNIK, setAddNIK] = useState('');
+  const [addEmployeeId, setAddEmployeeId] = useState('');
+  const [addRole, setAddRole] = useState<UserRole>('viewer');
+  const [addShift, setAddShift] = useState<ShiftType | ''>('');
+  const [addErrors, setAddErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async (s = search, p = page) => {
     const result = await fetchEmployees(p, PAGE_SIZE, s);
@@ -64,8 +75,10 @@ export default function EmployeesPage() {
   const openEdit = (emp: Profile) => {
     setEditEmployee(emp);
     setEditFullName(emp.full_name);
-    setEditDepartment(emp.department || '');
-    setEditRole(emp.role === 'inactive' ? 'employee' : emp.role);
+    // Convert old 'employee' role to 'viewer' (for backward compatibility)
+    const currentRole = (emp.role as string) === 'employee' ? 'viewer' : emp.role;
+    setEditRole(currentRole === 'inactive' ? 'viewer' : currentRole as UserRole);
+    setEditShift(emp.shift_type || '');
     setSaving(false);
   };
 
@@ -74,8 +87,8 @@ export default function EmployeesPage() {
     setSaving(true);
     const result = await updateEmployee(editEmployee.id, {
       full_name: editFullName,
-      department: editDepartment || undefined,
       role: editRole,
+      shift_type: editShift || null,
     });
     if (result.success) {
       toast.success('Employee updated');
@@ -125,18 +138,69 @@ export default function EmployeesPage() {
   const handleToggleRole = async (emp: Profile) => {
     const result = await toggleRole(emp.id, emp.role);
     if (result.success) {
-      toast.success(`Role changed to ${emp.role === 'admin' ? 'employee' : 'admin'}`);
+      const newRole = emp.role === 'admin' ? 'viewer' : 'admin';
+      toast.success(`Role changed to ${newRole}`);
       load(search, page);
     } else {
       toast.error('Failed to update role');
     }
   };
 
+  // Open add modal
+  const openAddModal = () => {
+    setAddFullName('');
+    setAddEmail('');
+    setAddPassword('');
+    setAddNIK('');
+    setAddEmployeeId('');
+    setAddRole('viewer');
+    setAddShift('');
+    setAddErrors({});
+    setShowAddModal(true);
+  };
+
+  // Validate add form
+  const validateAddForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!addFullName.trim()) errors.full_name = 'Nama lengkap wajib diisi';
+    if (!addEmail.trim()) errors.email = 'Email wajib diisi';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addEmail)) errors.email = 'Format email tidak valid';
+    if (!addPassword) errors.password = 'Password wajib diisi';
+    else if (addPassword.length < 8) errors.password = 'Password minimal 8 karakter';
+    setAddErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Handle add employee
+  const handleAddEmployee = async () => {
+    if (!validateAddForm()) return;
+    setSaving(true);
+    const result = await createEmployee({
+      email: addEmail,
+      password: addPassword,
+      full_name: addFullName,
+      nik: addNIK || undefined,
+      employee_id: addEmployeeId || undefined,
+      role: addRole,
+      shift_type: addShift || undefined,
+    });
+    setSaving(false);
+    if (result.success) {
+      toast.success(result.message || 'Karyawan berhasil ditambahkan');
+      setShowAddModal(false);
+      load(search, page);
+    } else {
+      toast.error(result.error || 'Gagal menambahkan karyawan');
+    }
+  };
+
   // CSV Export
   const exportCSV = () => {
-    const headers = ['Name', 'Email', 'Department', 'Role', 'Status', 'Created'];
+    const headers = ['Name', 'Email', 'Role', 'Shift', 'Status', 'Created'];
     const rows = employees.map((e) => [
-      e.full_name, e.email, e.department || '', e.role, 'active', e.created_at,
+      e.full_name, e.email, e.role, 
+      e.shift_type === 'morning' ? 'Pagi' : e.shift_type === 'afternoon' ? 'Siang' : '-',
+      'active', e.created_at,
     ]);
     const csv = [headers, ...rows]
       .map((r) => r.map((c) => `"${c}"`).join(','))
@@ -151,8 +215,7 @@ export default function EmployeesPage() {
     toast.success('CSV exported');
   };
 
-  const activeEmployees = employees.filter((e) => e.role !== 'inactive');
-  const departments = getDepartments();
+  const activeEmployees = employees.filter((e) => e.role !== 'inactive' && e.role !== 'admin');
 
   return (
     <div className="space-y-5">
@@ -161,21 +224,24 @@ export default function EmployeesPage() {
         <SearchInput
           value={search}
           onChange={handleSearch}
-          placeholder="Search name, email, department..."
+          placeholder="Search name, email..."
           className="flex-1"
         />
         <Button variant="secondary" onClick={exportCSV}>
           <Download className="w-4 h-4" /> Export CSV
         </Button>
+        <Button variant="primary" onClick={openAddModal}>
+          <UserPlus className="w-4 h-4" /> Tambah Karyawan
+        </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard icon={<Users className="w-6 h-6" />} value={total} label="Total Employees" color="blue" />
-        <StatsCard icon={<UserCog className="w-6 h-6" />} value={employees.filter(e => e.role === 'admin').length} label="Admins" color="purple" />
-        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'employee').length} label="Employees" color="green" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatsCard icon={<UserCog className="w-6 h-6" />} value={employees.filter(e => e.role === 'viewer').length} label="Viewers" color="gray" />
         <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'driver').length} label="Drivers" color="blue" />
-        <StatsCard icon={<Building2 className="w-6 h-6" />} value={departments.length} label="Departments" color="yellow" />
+        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'juru_parkir').length} label="Juru Parkir" color="green" />
+        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'ob').length} label="OB" color="orange" />
+        <StatsCard icon={<Clock className="w-6 h-6" />} value={employees.length} label="Total Active" color="purple" />
       </div>
 
       {/* Table */}
@@ -186,8 +252,8 @@ export default function EmployeesPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Name</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Email</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Department</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Role</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Shift</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Actions</th>
               </tr>
             </thead>
@@ -213,41 +279,43 @@ export default function EmployeesPage() {
                         <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600">
                           {emp.full_name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium">{emp.full_name}</span>
+                        <span className="font-medium text-gray-900">{emp.full_name}</span>
                       </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{emp.email}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{emp.department || '—'}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => handleToggleRole(emp)} title="Click to toggle role">
-                        <Badge variant={emp.role === 'admin' ? 'info' : emp.role === 'driver' ? 'success' : 'default'}>
-                          {emp.role}
-                        </Badge>
-                      </button>
+                      <Badge variant={
+                        emp.role === 'admin' ? 'info' :
+                        emp.role === 'viewer' ? 'default' :
+                        emp.role === 'driver' ? 'success' :
+                        emp.role === 'juru_parkir' ? 'success' :
+                        emp.role === 'ob' ? 'warning' :
+                        emp.role === 'inactive' ? 'danger' : 'default'
+                      }>
+                        {emp.role === 'juru_parkir' ? 'Juru Parkir' : 
+                         emp.role === 'ob' ? 'OB' : 
+                         emp.role === 'viewer' ? 'Viewer' : 
+                         emp.role === 'admin' ? 'Admin' :
+                         emp.role}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => openEdit(emp)}>
-                          Edit
-                        </Button>
-                        {emp.role !== 'inactive' ? (
-                          <Button size="sm" variant="danger" onClick={() => setConfirmAction({
-                            employee: emp,
-                            action: 'deactivate',
-                            originalRole: emp.role === 'admin' ? 'admin' : 'employee',
-                          })}>
-                            Deactivate
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="secondary" onClick={() => setConfirmAction({
-                            employee: emp,
-                            action: 'activate',
-                            originalRole: emp.role === 'admin' ? 'admin' : 'employee',
-                          })}>
-                            Activate
-                          </Button>
-                        )}
-                      </div>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        emp.shift_type === 'morning'
+                          ? 'bg-blue-100 text-blue-700'
+                          : emp.shift_type === 'afternoon'
+                          ? 'bg-orange-100 text-orange-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {emp.shift_type === 'morning' ? 'Pagi' :
+                         emp.shift_type === 'afternoon' ? 'Siang' :
+                         '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Button size="sm" variant="ghost" onClick={() => openEdit(emp)}>
+                        Edit
+                      </Button>
                     </td>
                   </tr>
                 ))
@@ -278,21 +346,26 @@ export default function EmployeesPage() {
               value={editFullName}
               onChange={(e) => setEditFullName(e.target.value)}
             />
-            <FormInput
-              label="Department"
-              value={editDepartment}
-              onChange={(e) => setEditDepartment(e.target.value)}
-              placeholder="Leave blank to remove"
-            />
             <FormSelect
               label="Role"
               value={editRole}
               onChange={(e) => setEditRole(e.target.value as UserRole)}
               options={[
-                { value: 'employee', label: 'Employee' },
-                { value: 'admin', label: 'Admin' },
+                { value: 'juru_parkir', label: 'Juru Parkir' },
                 { value: 'driver', label: 'Driver' },
+                { value: 'ob', label: 'OB' },
+                { value: 'viewer', label: 'Viewer' },
                 { value: 'inactive', label: 'Inactive' },
+              ]}
+            />
+            <FormSelect
+              label="Shift"
+              value={editShift}
+              onChange={(e) => setEditShift(e.target.value as ShiftType | '')}
+              options={[
+                { value: '', label: 'Tidak Ada' },
+                { value: 'morning', label: 'Pagi (06:00 - 14:00)' },
+                { value: 'afternoon', label: 'Siang (10:00 - 18:00)' },
               ]}
             />
             <div className="flex gap-2 pt-2">
@@ -319,19 +392,36 @@ export default function EmployeesPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-gray-500">Email</p>
-                <p className="font-medium">{detailEmployee.email}</p>
+                <p className="font-medium text-gray-900">{detailEmployee.email}</p>
               </div>
               <div>
                 <p className="text-gray-500">Role</p>
-                <Badge variant={detailEmployee.role === 'admin' ? 'info' : 'default'}>{detailEmployee.role}</Badge>
+                <Badge variant={
+                  detailEmployee.role === 'admin' ? 'info' :
+                  detailEmployee.role === 'viewer' ? 'default' :
+                  detailEmployee.role === 'driver' ? 'success' :
+                  detailEmployee.role === 'juru_parkir' ? 'success' :
+                  detailEmployee.role === 'ob' ? 'warning' :
+                  detailEmployee.role === 'inactive' ? 'danger' : 'default'
+                }>
+                  {detailEmployee.role === 'juru_parkir' ? 'Juru Parkir' : 
+                   detailEmployee.role === 'ob' ? 'OB' : 
+                   detailEmployee.role === 'viewer' ? 'Viewer' : 
+                   detailEmployee.role === 'admin' ? 'Admin' :
+                   detailEmployee.role}
+                </Badge>
               </div>
               <div>
-                <p className="text-gray-500">Department</p>
-                <p className="font-medium">{detailEmployee.department || '—'}</p>
+                <p className="text-gray-500">Shift</p>
+                <p className="font-medium">
+                  {detailEmployee.shift_type === 'morning' ? 'Pagi (06:00 - 14:00)' :
+                   detailEmployee.shift_type === 'afternoon' ? 'Siang (10:00 - 18:00)' :
+                   '—'}
+                </p>
               </div>
               <div>
                 <p className="text-gray-500">Joined</p>
-                <p className="font-medium">{new Date(detailEmployee.created_at).toLocaleDateString('id-ID')}</p>
+                <p className="font-medium text-gray-600">{new Date(detailEmployee.created_at).toLocaleDateString('id-ID')}</p>
               </div>
             </div>
 
@@ -359,35 +449,84 @@ export default function EmployeesPage() {
         )}
       </Modal>
 
-      {/* Confirm Modal */}
+
+      {/* Add Employee Modal */}
       <Modal
-        isOpen={!!confirmAction}
-        onClose={() => setConfirmAction(null)}
-        title={confirmAction?.action === 'deactivate' ? 'Deactivate Employee?' : 'Activate Employee?'}
-        size="sm"
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Tambah Karyawan Baru"
+        size="md"
       >
-        {confirmAction && (
-          <div className="space-y-4">
-            <p className="text-gray-600">
-              {confirmAction.action === 'deactivate'
-                ? `Are you sure you want to deactivate ${confirmAction.employee.full_name}? They will lose access to the system.`
-                : `Reactivate ${confirmAction.employee.full_name}? They will regain access with role: ${confirmAction.originalRole}.`}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant={confirmAction.action === 'deactivate' ? 'danger' : 'primary'}
-                onClick={confirmAction.action === 'deactivate' ? handleDeactivate : handleActivate}
-                className="flex-1"
-              >
-                {confirmAction.action === 'deactivate' ? 'Deactivate' : 'Activate'}
-              </Button>
-              <Button variant="secondary" onClick={() => setConfirmAction(null)}>
-                Cancel
-              </Button>
-            </div>
+        <div className="space-y-4">
+          <FormInput
+            label="Nama Lengkap *"
+            value={addFullName}
+            onChange={(e) => setAddFullName(e.target.value)}
+            error={addErrors.full_name}
+            placeholder="Masukkan nama lengkap"
+          />
+          <FormInput
+            label="Email *"
+            type="email"
+            value={addEmail}
+            onChange={(e) => setAddEmail(e.target.value)}
+            error={addErrors.email}
+            placeholder="email@contoh.com"
+          />
+          <FormInput
+            label="Password *"
+            type="password"
+            value={addPassword}
+            onChange={(e) => setAddPassword(e.target.value)}
+            error={addErrors.password}
+            placeholder="Minimal 8 karakter"
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput
+              label="NIK"
+              value={addNIK}
+              onChange={(e) => setAddNIK(e.target.value)}
+              placeholder="Nomor Induk Kependudukan"
+            />
+            <FormInput
+              label="Employee ID"
+              value={addEmployeeId}
+              onChange={(e) => setAddEmployeeId(e.target.value)}
+              placeholder="ID Karyawan"
+            />
           </div>
-        )}
+          <FormSelect
+            label="Role *"
+            value={addRole}
+            onChange={(e) => setAddRole(e.target.value as UserRole)}
+            options={[
+              { value: 'juru_parkir', label: 'Juru Parkir' },
+              { value: 'driver', label: 'Driver' },
+              { value: 'ob', label: 'OB' },
+              { value: 'viewer', label: 'Viewer' },
+            ]}
+          />
+          <FormSelect
+            label="Shift"
+            value={addShift}
+            onChange={(e) => setAddShift(e.target.value as ShiftType | '')}
+            options={[
+              { value: '', label: 'Tidak Ada' },
+              { value: 'morning', label: 'Pagi (06:00 - 14:00)' },
+              { value: 'afternoon', label: 'Siang (10:00 - 18:00)' },
+            ]}
+          />
+          <div className="flex gap-2 pt-2">
+            <Button onClick={handleAddEmployee} loading={saving} className="flex-1">
+              <UserPlus className="w-4 h-4" /> Tambah Karyawan
+            </Button>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={saving}>
+              Batal
+            </Button>
+          </div>
+        </div>
       </Modal>
+
     </div>
   );
 }

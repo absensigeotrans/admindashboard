@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120" fill="none" width="520" height="120">
+  <g id="pertamina-icon" transform="translate(0, 12) scale(2.2)">
+    <path fill="#ED1B2F" d="M31.8489 1.76193C31.4878 1.21983 30.9983 0.775388 30.4239 0.468161C29.8495 0.160933 29.2082 0.000447399 28.5568 0.000977873H19.4634L24.4832 7.73072C24.8445 8.27277 25.3341 8.71717 25.9085 9.02446C26.4829 9.33174 27.1243 9.49239 27.7757 9.49213H36.8721L31.8489 1.76193Z"/>
+    <path fill="#ACC42A" d="M24.4887 13.6264C24.8497 13.0843 25.3391 12.64 25.9134 12.3328C26.4877 12.0256 27.129 11.8652 27.7803 11.8657H36.8718L31.8523 19.5944C31.4916 20.137 31.0022 20.5819 30.4278 20.8895C29.8534 21.1971 29.2118 21.3577 28.5602 21.3572H19.4634L24.4887 13.6264Z"/>
+    <path fill="#006CB8" d="M20.5536 13.8329C21.0513 13.0772 21.6743 12.4119 22.3957 11.8657H12.7398C12.0886 11.8653 11.4474 12.0258 10.8732 12.3329C10.299 12.6401 9.80961 13.0844 9.44858 13.6264L0.103821 28.0024H9.20272C9.85403 28.0028 10.4953 27.8419 11.0693 27.5342C11.6434 27.2265 12.1323 26.7814 12.4924 26.2387L20.5536 13.8329Z"/>
+  </g>
+  <g id="text-pertamina" transform="translate(110, 22)">
+    <text font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="42" fill="#1a1a1a" letter-spacing="1">PERTAMINA</text>
+  </g>
+  <g id="text-trans-kontinental" transform="translate(110, 68)">
+    <text font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="22" fill="#ED1B2F" letter-spacing="2">TRANS KONTINENTAL</text>
+  </g>
+</svg>

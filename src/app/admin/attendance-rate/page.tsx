@@ -28,23 +28,14 @@ export default function AttendanceRatePage() {
   } = useAttendanceRate();
 
   const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState<string>('');
   const [sortKey, setSortKey] = useState<SortKey>('attendanceRate');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
-
-  const departments = useMemo(() => {
-    const depts = Array.from(new Set(stats.map((s) => s.department).filter(Boolean)));
-    return depts.sort() as string[];
-  }, [stats]);
 
   const filtered = useMemo(() => {
     let result = [...stats];
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((s) => s.fullName.toLowerCase().includes(q));
-    }
-    if (deptFilter) {
-      result = result.filter((s) => s.department === deptFilter);
     }
     result.sort((a, b) => {
       let cmp = 0;
@@ -56,7 +47,7 @@ export default function AttendanceRatePage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return result;
-  }, [stats, search, deptFilter, sortKey, sortDir]);
+  }, [stats, search, sortKey, sortDir]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -155,7 +146,7 @@ export default function AttendanceRatePage() {
         />
       </div>
 
-      {/* Search & Filter */}
+      {/* Search */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -167,16 +158,6 @@ export default function AttendanceRatePage() {
             className="w-full pl-9 pr-4 py-2.5 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
-          value={deptFilter}
-          onChange={(e) => setDeptFilter(e.target.value)}
-          className="px-3 py-2.5 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">All Departments</option>
-          {departments.map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
       </div>
 
       {/* Table */}
@@ -198,7 +179,6 @@ export default function AttendanceRatePage() {
                   <th className={thClass} onClick={() => handleSort('fullName')}>
                     <div className="flex items-center gap-1">Name {renderSortIcon('fullName')}</div>
                   </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dept</th>
                   <th className={thClass} onClick={() => handleSort('attendanceRate')}>
                     <div className="flex items-center gap-1">Rate {renderSortIcon('attendanceRate')}</div>
                   </th>
@@ -234,7 +214,6 @@ export default function AttendanceRatePage() {
                           <span className="font-medium text-gray-900">{emp.fullName}</span>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-sm text-gray-500">{emp.department || '—'}</td>
                       <td className={tdClass}>{renderRateBadge(emp.attendanceRate)}</td>
                       <td className={tdClass}>{emp.present}</td>
                       <td className={tdClass}>

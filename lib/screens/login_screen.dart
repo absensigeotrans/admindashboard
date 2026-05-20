@@ -5,8 +5,8 @@ import '../services/biometric_service.dart';
 import 'registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  final String shiftType;
-  const LoginScreen({super.key, required this.shiftType});
+  final String? shiftType;
+  const LoginScreen({super.key, this.shiftType});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -172,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.shiftType == 'shifting' ? 'Login Shifting' : 'Login Non-Shifting'),
+        title: const Text('Login - GeoAttend PTK'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -259,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => RegistrationScreen(shiftType: widget.shiftType),
+                        builder: (_) => RegistrationScreen(shiftType: widget.shiftType ?? ''),
                       ),
                     );
                   },

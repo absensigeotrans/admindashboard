@@ -9,7 +9,6 @@ export type Period = '7d' | '30d' | 'custom';
 export interface EmployeeStat {
   id: string;
   fullName: string;
-  department: string | null;
   present: number;
   late: number;
   outside: number;
@@ -67,14 +66,14 @@ export function useAttendanceRate(): UseAttendanceRateReturn {
     try {
       const { data: employees, error: empErr } = await supabase
         .from('profiles')
-        .select('id, full_name, department')
-        .eq('role', 'employee')
+        .select('id, full_name')
+        .in('role', ['viewer', 'driver', 'juru_parkir', 'ob'])
         .order('full_name');
 
       if (empErr) throw empErr;
       if (!mountedRef.current) return;
 
-      const empList = (employees || []) as Pick<Profile, 'id' | 'full_name' | 'department'>[];
+      const empList = (employees || []) as Pick<Profile, 'id' | 'full_name'>[];
 
       if (empList.length === 0) {
         setStats([]);
@@ -121,7 +120,6 @@ export function useAttendanceRate(): UseAttendanceRateReturn {
         return {
           id: emp.id,
           fullName: emp.full_name,
-          department: emp.department,
           present: ua.present,
           late: ua.late,
           outside: ua.outside,

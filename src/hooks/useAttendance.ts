@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Attendance, AttendanceStatus } from '@/types';
+import { Attendance } from '@/types';
 
 interface UseAttendanceReturn {
   todayAttendance: Attendance | null;
@@ -36,32 +36,57 @@ export function useAttendance(): UseAttendanceReturn {
         .single();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Fetch today attendance error details:', {
+          code: fetchError.code,
+          message: fetchError.message,
+          details: fetchError.details,
+          hint: fetchError.hint
+        });
         throw fetchError;
       }
 
       setTodayAttendance((data as Attendance | null) ?? null);
     } catch (err) {
+      console.error('Fetch attendance error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch attendance');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchHistory = useCallback(async (limit = 30) => {
+  const fetchHistory = useCallback(async (limit = 100) => {
     setLoading(true);
     setError(null);
 
     try {
+      // Fetch attendance with user profile info
       const { data, error: fetchError } = await supabase
         .from('attendance')
-        .select('*')
+        .select(`
+          *,
+          profiles:user_id (
+            id,
+            full_name,
+            employee_id,
+            nik
+          )
+        `)
         .order('check_in_time', { ascending: false })
         .limit(limit);
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Fetch history error details:', {
+          code: fetchError.code,
+          message: fetchError.message,
+          details: fetchError.details,
+          hint: fetchError.hint
+        });
+        throw fetchError;
+      }
 
-      setHistory(data as Attendance[] || []);
+      setHistory((data as Attendance[]) || []);
     } catch (err) {
+      console.error('History fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch history');
     } finally {
       setLoading(false);
@@ -76,14 +101,24 @@ export function useAttendance(): UseAttendanceReturn {
       const { data, error: insertError } = await supabase
         .from('attendance')
         .insert([{
-          latitude,
-          longitude,
+          check_in_latitude: latitude,
+          check_in_longitude: longitude,
           distance_from_office: 0,
+          is_valid: true,
+          is_mocked: false,
         }])
         .select()
         .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Clock in error details:', {
+          code: insertError.code,
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint
+        });
+        throw insertError;
+      }
 
       setTodayAttendance(data as Attendance);
       return { success: true };
@@ -106,7 +141,15 @@ export function useAttendance(): UseAttendanceReturn {
         .update({ check_out_time: new Date().toISOString() })
         .eq('id', attendanceId);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Clock out error details:', {
+          code: updateError.code,
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint
+        });
+        throw updateError;
+      }
 
       await fetchTodayAttendance();
       return { success: true };
