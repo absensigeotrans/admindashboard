@@ -24,6 +24,7 @@ import {
   Clock,
   AlertTriangle,
   LogOut,
+  Image,
 } from 'lucide-react';
 
 const navItems = [
@@ -35,6 +36,7 @@ const navItems = [
   { href: '/admin/attendance-rate', icon: BarChart3, label: 'Attendance Rate' },
   { href: '/admin/leave-requests', icon: CalendarX, label: 'Leave Requests', badgeKey: 'pendingLeaves' },
   { href: '/admin/monitoring', icon: Radio, label: 'Live Monitoring' },
+  { href: '/admin/photos', icon: Image, label: 'Photos' },
   { href: '/admin/activity-logs', icon: Activity, label: 'Activity Logs' },
   { href: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
