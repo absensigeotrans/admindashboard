@@ -1,17 +1,19 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { useOffices } from '@/hooks/useOffices';
 import { supabase } from '@/lib/supabase';
 import { formatDistance } from '@/lib/utils';
 import { StatsCard } from '@/components/ui/StatsCard';
-import { Pagination } from '@/components/ui/Pagination';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FormInput } from '@/components/ui/FormInput';
 import { toast } from '@/components/ui/Toast';
 import { formatWIBTime, formatWIBDateDisplay, formatWIBDateShort } from '@/lib/timezone';
 import { MapPin, Plus, Save, Trash2, Users, Clock } from 'lucide-react';
+
+const MapPicker = dynamic(() => import('@/components/admin/MapPicker'), { ssr: false });
 
 interface OfficeForm {
   name: string;
@@ -154,14 +156,19 @@ export default function OfficesPage() {
       </div>
 
       {/* Form Modal */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingId ? 'Edit Office' : 'New Office'} size="md">
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingId ? 'Edit Office' : 'New Office'} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormInput label="Office Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g., Jakarta HQ" required />
-          <div className="grid grid-cols-2 gap-4">
-            <FormInput label="Latitude" type="number" step="any" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} placeholder="-6.2088" required />
-            <FormInput label="Longitude" type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} placeholder="106.8456" required />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+            <MapPicker
+              latitude={parseFloat(form.latitude) || -6.2088}
+              longitude={parseFloat(form.longitude) || 106.8456}
+              radius={parseInt(form.geofence_radius) || 100}
+              onPositionChange={(lat, lng) => setForm({ ...form, latitude: lat.toString(), longitude: lng.toString() })}
+              onRadiusChange={(r) => setForm({ ...form, geofence_radius: r.toString() })}
+            />
           </div>
-          <FormInput label="Geofence Radius (meters)" type="number" min="10" max="10000" value={form.geofence_radius} onChange={(e) => setForm({ ...form, geofence_radius: e.target.value })} hint="Recommended: 100 meters" required />
           <div className="flex gap-2 pt-2">
             <Button type="submit" loading={saving} className="flex-1">
               <Save className="w-4 h-4" /> {editingId ? 'Update' : 'Save'}
