@@ -20,14 +20,14 @@ export function DateRangePicker({ from, to, onFromChange, onToChange, className 
           type="date"
           value={from}
           onChange={(e) => onFromChange(e.target.value)}
-          className="px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <span className="text-gray-400 text-sm">to</span>
         <input
           type="date"
           value={to}
           onChange={(e) => onToChange(e.target.value)}
-          className="px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
     </div>

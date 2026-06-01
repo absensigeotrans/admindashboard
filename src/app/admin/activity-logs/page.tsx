@@ -8,18 +8,15 @@ import { StatsCard } from '@/components/ui/StatsCard';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Activity, Database, Clock } from 'lucide-react';
-import { format } from 'date-fns';
 import { AttendanceLog } from '@/types';
+import { getWIBDaysAgo, getWIBDate, formatWIBDateDisplay, formatWIBTimeWithSeconds } from '@/lib/timezone';
 
 const PAGE_SIZE = 50;
 
 export default function ActivityLogsPage() {
   const { logs, loading, error, fetchLogs } = useActivityLogs();
-  const [from, setFrom] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
-  });
-  const [to, setTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [from, setFrom] = useState(() => getWIBDaysAgo(7));
+  const [to, setTo] = useState(() => getWIBDate());
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
@@ -60,8 +57,8 @@ export default function ActivityLogsPage() {
       sortable: true,
       render: (row: AttendanceLog) => (
         <div>
-          <p className="text-sm font-medium">{format(new Date(row.created_at), 'dd MMM yyyy')}</p>
-          <p className="text-xs text-gray-500">{format(new Date(row.created_at), 'HH:mm:ss')}</p>
+          <p className="text-sm font-medium">{formatWIBDateDisplay(row.created_at)}</p>
+          <p className="text-xs text-gray-500">{formatWIBTimeWithSeconds(row.created_at)}</p>
         </div>
       ),
     },

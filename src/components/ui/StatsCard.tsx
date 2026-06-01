@@ -2,9 +2,9 @@
 
 interface StatsCardProps {
   icon: React.ReactNode;
-  value: number | string;
+  value: number | string | React.ReactNode;
   label: string;
-  trend?: string;
+  trend?: string | React.ReactNode;
   color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'gray' | 'orange';
 }
 

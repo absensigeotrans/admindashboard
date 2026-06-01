@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FormInput } from '@/components/ui/FormInput';
 import { toast } from '@/components/ui/Toast';
+import { formatWIBTime, formatWIBDateDisplay, formatWIBDateShort } from '@/lib/timezone';
 import { MapPin, Plus, Save, Trash2, Users, Clock } from 'lucide-react';
 
 interface OfficeForm {
@@ -59,7 +60,7 @@ export default function OfficesPage() {
 
         const attendees = (recent || []).slice(0, 5).map((r: any) => ({
           name: r.profiles?.full_name || 'Unknown',
-          time: new Date(r.check_in_time).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
+          time: `${formatWIBDateShort(r.check_in_time)} ${formatWIBTime(r.check_in_time)}`,
         }));
 
         stats[office.id] = {
@@ -83,6 +84,7 @@ export default function OfficesPage() {
       latitude: parseFloat(form.latitude),
       longitude: parseFloat(form.longitude),
       geofence_radius: parseInt(form.geofence_radius),
+      is_active: true,
     };
 
     let result;
@@ -192,7 +194,7 @@ export default function OfficesPage() {
                 </div>
                 <div>
                   <p className="text-gray-500">Created</p>
-                  <p className="font-medium">{new Date(office.created_at).toLocaleDateString('id-ID')}</p>
+                  <p className="font-medium">{formatWIBDateDisplay(office.created_at)}</p>
                 </div>
               </div>
 

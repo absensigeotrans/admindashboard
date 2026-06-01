@@ -67,9 +67,9 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
 
-    if (authService.user == null) {
-      return const ShiftSelectionScreen();
-    }
+  if (authService.user == null) {
+    return const LoginScreen();
+  }
 
     // Jika user sudah login tapi profile belum ke-load
     if (authService.profile == null) {

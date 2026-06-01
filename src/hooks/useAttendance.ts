@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Attendance } from '@/types';
+import { getWIBStartOfDay, getWIBEndOfDay } from '@/lib/timezone';
 
 interface UseAttendanceReturn {
   todayAttendance: Attendance | null;
@@ -26,11 +27,11 @@ export function useAttendance(): UseAttendanceReturn {
     setError(null);
 
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const todayStart = getWIBStartOfDay();
       const { data, error: fetchError } = await supabase
         .from('attendance')
         .select('*')
-        .gte('check_in_time', today)
+        .gte('check_in_time', todayStart)
         .order('check_in_time', { ascending: false })
         .limit(1)
         .single();
@@ -101,6 +102,7 @@ export function useAttendance(): UseAttendanceReturn {
       const { data, error: insertError } = await supabase
         .from('attendance')
         .insert([{
+          check_in_time: new Date().toISOString(),
           check_in_latitude: latitude,
           check_in_longitude: longitude,
           distance_from_office: 0,

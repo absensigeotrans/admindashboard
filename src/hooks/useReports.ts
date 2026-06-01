@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Attendance, AttendanceStatus, ShiftType } from '@/types';
+import { getWIBDateRange } from '@/lib/timezone';
 
 interface ReportFilters {
   from?: string;
@@ -12,33 +13,36 @@ interface ReportFilters {
 }
 
 interface AttendanceWithProfile {
-  id: string;
-  user_id: string;
-  shift_id?: string;
-  office_id?: string;
-  check_in_time: string;
-  check_in_latitude: number;
-  check_in_longitude: number;
-  check_in_location_data?: Record<string, unknown>;
-  check_out_time?: string | null;
-  check_out_latitude?: number | null;
-  check_out_longitude?: number | null;
-  check_out_location_data?: Record<string, unknown>;
-  is_valid: boolean;
-  is_mocked: boolean;
-  distance_from_office: number;
-  status: AttendanceStatus;
-  created_at: string;
-  updated_at: string;
-  shift_type?: ShiftType | null;
-  profiles?: {
-    full_name: string;
-    email?: string;
-    employee_id?: string;
-    nik?: string;
-    role?: string;
-  };
-}
+   id: string;
+   user_id: string;
+   shift_id?: string;
+   office_id?: string;
+   check_in_time: string;
+   check_in_latitude: number;
+   check_in_longitude: number;
+   check_in_location_data?: Record<string, unknown>;
+   check_out_time?: string | null;
+   check_out_latitude?: number | null;
+   check_out_longitude?: number | null;
+   check_out_location_data?: Record<string, unknown>;
+   is_valid: boolean;
+   is_mocked: boolean;
+   distance_from_office: number;
+   status: AttendanceStatus;
+   created_at: string;
+   updated_at: string;
+   shift_type?: ShiftType | null;
+   overtime_minutes?: number | null;
+   work_duration_minutes?: number | null;
+   work_status?: string; // WFH, WFO, DINAS, Lainnya
+   profiles?: {
+     full_name: string;
+     email?: string;
+     employee_id?: string;
+     nik?: string;
+     role?: string;
+   };
+ }
 
 export function useReports() {
   const [records, setRecords] = useState<AttendanceWithProfile[]>([]);
@@ -57,21 +61,25 @@ export function useReports() {
         .from('attendance')
         .select(`
           *,
-          profiles!user_id(full_name, email, employee_id, nik, role)
+          profiles:user_id (
+            id,
+            full_name,
+            email,
+            employee_id,
+            nik,
+            role
+          )
         `, { count: 'exact' })
         .order('check_in_time', { ascending: false })
         .range((page - 1) * limit, page * limit - 1);
 
       if (filters.from) {
-        query = query.gte('check_in_time', filters.from);
+        const { start } = getWIBDateRange(filters.from);
+        query = query.gte('check_in_time', start);
       }
       if (filters.to) {
-        // Use inclusive end of day
-        const toDate = new Date(filters.to);
-        if (!isNaN(toDate.getTime())) {
-          toDate.setHours(23, 59, 59, 999);
-          query = query.lte('check_in_time', toDate.toISOString());
-        }
+        const { end } = getWIBDateRange(filters.to);
+        query = query.lte('check_in_time', end);
       }
       if (filters.status) {
         query = query.eq('status', filters.status);
@@ -79,44 +87,59 @@ export function useReports() {
       if (filters.isMocked !== undefined) {
         query = query.eq('is_mocked', filters.isMocked);
       }
-      if (filters.search) {
-        // Search in profile names via the relation
-        query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,employee_id.ilike.%${filters.search}%`, { foreignTable: 'profiles' });
-      }
       if (filters.excludeOutsideRadius) {
         query = query.neq('status', 'outside_radius');
       }
 
-      const { data, error: fetchError, count } = await query;
-      if (fetchError) {
-        console.error('useReports fetchReport ERROR OBJECT:', fetchError);
-        console.error('useReports fetchReport ERROR STRING:', JSON.stringify(fetchError, null, 2));
-        throw fetchError;
+      if (filters.search) {
+        // Step 1: Pre-fetch profile IDs that match the search string
+        const { data: searchProfiles, error: pError } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,employee_id.ilike.%${filters.search}%`);
+        
+        if (pError) throw pError;
+
+        if (searchProfiles && searchProfiles.length > 0) {
+          const profileIds = searchProfiles.map(p => p.id);
+          query = query.in('user_id', profileIds);
+        } else {
+          // No profiles found for search term, return empty list
+          setRecords([]);
+          return { data: [], count: 0 };
+        }
       }
 
-      // Enrich with shift type from user_shift_schedules
+      const { data, error: fetchError, count } = await query;
+      if (fetchError) throw fetchError;
+
+      // Step 2: Enrich with shift type safely
       const result = await Promise.all(
         (data || []).map(async (record) => {
-          const checkInDate = new Date(record.check_in_time).toISOString().split('T')[0];
-          const shiftResult = await supabase
-            .from('user_shift_schedules')
-            .select('shift_type')
-            .eq('user_id', record.user_id)
-            .eq('schedule_date', checkInDate)
-            .maybeSingle();
+          try {
+            const checkInDate = new Date(record.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+            const { data: shiftData } = await supabase
+              .from('user_shift_schedules')
+              .select('shift_type')
+              .eq('user_id', record.user_id)
+              .eq('schedule_date', checkInDate)
+              .maybeSingle();
 
-          return {
-            ...record,
-            shift_type: (shiftResult as { shift_type?: string } | null)?.shift_type as ShiftType | undefined,
-          };
+            return {
+              ...record,
+              shift_type: (shiftData as any)?.shift_type,
+            };
+          } catch (e) {
+            return { ...record };
+          }
         })
       );
 
       setRecords(result as AttendanceWithProfile[]);
       return { data: result as AttendanceWithProfile[], count: count || 0 };
     } catch (err: any) {
-      console.error('Report fetch catch block err:', err);
-      const msg = err?.message || err?.details || (typeof err === 'string' ? err : 'Failed to fetch report');
+      console.error('Report fetch error:', err);
+      const msg = err?.message || 'Failed to fetch report';
       setError(msg);
       return { data: [], count: 0 };
     } finally {
@@ -144,19 +167,24 @@ export function useReports() {
         .from('attendance')
         .select(`
           *,
-          profiles!user_id(full_name, email, employee_id, nik, role)
+          profiles:user_id (
+            id,
+            full_name,
+            email,
+            employee_id,
+            nik,
+            role
+          )
         `)
         .order('check_in_time', { ascending: false });
 
       if (filters.from) {
-        query = query.gte('check_in_time', filters.from);
+        const { start } = getWIBDateRange(filters.from);
+        query = query.gte('check_in_time', start);
       }
       if (filters.to) {
-        const toDate = new Date(filters.to);
-        if (!isNaN(toDate.getTime())) {
-          toDate.setHours(23, 59, 59, 999);
-          query = query.lte('check_in_time', toDate.toISOString());
-        }
+        const { end } = getWIBDateRange(filters.to);
+        query = query.lte('check_in_time', end);
       }
       if (filters.status) {
         query = query.eq('status', filters.status);
@@ -168,27 +196,44 @@ export function useReports() {
         query = query.neq('status', 'outside_radius');
       }
 
-      const { data, error: fetchError } = await query;
-      if (fetchError) {
-        console.error('useReports fetchAllRecords ERROR:', JSON.stringify(fetchError, null, 2));
-        throw fetchError;
+      if (filters.search) {
+        const { data: searchProfiles, error: pError } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,employee_id.ilike.%${filters.search}%`);
+        
+        if (pError) throw pError;
+
+        if (searchProfiles && searchProfiles.length > 0) {
+          const profileIds = searchProfiles.map(p => p.id);
+          query = query.in('user_id', profileIds);
+        } else {
+          setRecords([]);
+          return { data: [], count: 0 };
+        }
       }
 
-      // Enrich with shift type from user_shift_schedules
+      const { data, error: fetchError } = await query;
+      if (fetchError) throw fetchError;
+
       const result = await Promise.all(
         (data || []).map(async (record) => {
-          const checkInDate = new Date(record.check_in_time).toISOString().split('T')[0];
-          const shiftResult = await supabase
-            .from('user_shift_schedules')
-            .select('shift_type')
-            .eq('user_id', record.user_id)
-            .eq('schedule_date', checkInDate)
-            .maybeSingle();
+          try {
+            const checkInDate = new Date(record.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+            const { data: shiftData } = await supabase
+              .from('user_shift_schedules')
+              .select('shift_type')
+              .eq('user_id', record.user_id)
+              .eq('schedule_date', checkInDate)
+              .maybeSingle();
 
-          return {
-            ...record,
-            shift_type: (shiftResult as { shift_type?: string } | null)?.shift_type as ShiftType | undefined,
-          };
+            return {
+              ...record,
+              shift_type: (shiftData as any)?.shift_type,
+            };
+          } catch (e) {
+            return { ...record };
+          }
         })
       );
 
@@ -196,7 +241,6 @@ export function useReports() {
       return { data: result as AttendanceWithProfile[], count: result.length };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch all records';
-      console.error('All records fetch error:', msg);
       setError(msg);
       return { data: [], count: 0 };
     } finally {
@@ -209,30 +253,34 @@ export function useReports() {
     setLoading(true);
     setError(null);
     try {
-      const fromDate = new Date();
-      fromDate.setDate(fromDate.getDate() - days);
-      fromDate.setHours(0, 0, 0, 0);
+      const fromWIB = new Date();
+      fromWIB.setDate(fromWIB.getDate() - days);
+      const fromDateStr = fromWIB.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+      const { start: fromISO } = getWIBDateRange(fromDateStr);
 
       const { data, error: fetchError } = await supabase
         .from('attendance')
         .select(`
           *,
-          profiles!user_id(full_name, email, employee_id, nik)
+          profiles:user_id (
+            id,
+            full_name,
+            email,
+            employee_id,
+            nik,
+            role
+          )
         `)
-        .gte('check_in_time', fromDate.toISOString())
+        .gte('check_in_time', fromISO)
         .order('check_in_time', { ascending: false });
 
-      if (fetchError) {
-        console.error('useReports fetchDashboardData ERROR:', JSON.stringify(fetchError, null, 2));
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
       const result = data as AttendanceWithProfile[] || [];
       setRecords(result);
       return { data: result, count: result.length };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch dashboard data';
-      console.error('Dashboard data fetch error:', msg);
       setError(msg);
       return { data: [], count: 0 };
     } finally {
@@ -313,27 +361,18 @@ export function useReports() {
     setLoading(true);
     setError(null);
     try {
-      // Parse date as local time (WIB/UTC+7)
-      const [year, month, day] = date.split('-').map(Number);
-      const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-      const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+      const { start, end } = getWIBDateRange(date);
 
-      console.log('Deleting attendance for date:', date);
-      console.log('Start:', startOfDay.toISOString());
-      console.log('End:', endOfDay.toISOString());
 
-      const { error: deleteError, count } = await supabase
-        .from('attendance')
-        .delete()
-        .gte('check_in_time', startOfDay.toISOString())
-        .lte('check_in_time', endOfDay.toISOString());
+       const { error: deleteError, count } = await supabase
+         .from('attendance')
+         .delete()
+         .gte('check_in_time', start)
+         .lte('check_in_time', end);
 
-      console.log('Delete result - count:', count, 'error:', deleteError);
-
-      if (deleteError) {
-        console.error('deleteByDate ERROR:', deleteError);
-        throw deleteError;
-      }
+       if (deleteError) {
+         throw deleteError;
+       }
 
       // Clear local records since data changed
       setRecords([]);

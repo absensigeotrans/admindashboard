@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'database_helper.dart';
 import 'notification_service.dart';
+import 'selfie_service.dart';
 
 class SyncService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -85,26 +87,32 @@ class SyncService extends ChangeNotifier {
     );
   }
 
-  /// Simpan absensi ke local database
-  Future<bool> saveAttendanceOffline({
-    required String userId,
-    required DateTime checkInTime,
-    required double checkInLatitude,
-    required double checkInLongitude,
-    double? checkInDistance,
-    bool isMocked = false,
-  }) async {
+/// Simpan absensi ke local database
+   Future<bool> saveAttendanceOffline({
+     required String userId,
+     required DateTime checkInTime,
+     required double checkInLatitude,
+     required double checkInLongitude,
+     double? checkInDistance,
+     bool isMocked = false,
+     String? photoUrl,
+     String? localPhotoPath,
+     String? workStatus, // WFH, WFO, DINAS, Lainnya
+   }) async {
     try {
-      await _db.insertPendingAttendance({
-        'user_id': userId,
-        'check_in_time': checkInTime.toIso8601String(),
-        'check_in_latitude': checkInLatitude,
-        'check_in_longitude': checkInLongitude,
-        'is_mocked': isMocked ? 1 : 0,
-        'distance_from_office': checkInDistance ?? 0,
-        'sync_status': 'pending',
-        'created_at': DateTime.now().toIso8601String(),
-      });
+       await _db.insertPendingAttendance({
+         'user_id': userId,
+         'check_in_time': checkInTime.toIso8601String(),
+         'check_in_latitude': checkInLatitude,
+         'check_in_longitude': checkInLongitude,
+         'is_mocked': isMocked ? 1 : 0,
+         'distance_from_office': checkInDistance ?? 0,
+         if (photoUrl != null) 'photo_url': photoUrl,
+         if (localPhotoPath != null) 'local_photo_path': localPhotoPath,
+         'sync_status': 'pending',
+         'created_at': DateTime.now().toIso8601String(),
+         if (workStatus != null) 'work_status': workStatus,
+       });
 
       await _updatePendingCount();
 
@@ -177,8 +185,37 @@ class SyncService extends ChangeNotifier {
       for (final item in pendingList) {
         final id = item['id'] as int;
         final checkOutTime = item['check_out_time'] as String?;
+        final localPhotoPath = item['local_photo_path'] as String?;
+        final existingPhotoUrl = item['photo_url'] as String?;
+
+        // Skip records with invalid (0,0) coordinates
+        final lat = item['check_in_latitude'] as num? ?? 0;
+        final lng = item['check_in_longitude'] as num? ?? 0;
+        if (lat == 0 && lng == 0) {
+          debugPrint('[SyncService] Skipping record $id: invalid coordinates (0,0)');
+          await _db.markAttendanceFailed(id, 'Invalid coordinates (0,0)');
+          continue;
+        }
 
         try {
+          String? photoUrl = existingPhotoUrl;
+
+          // Upload local photo if exists
+          if (localPhotoPath != null && photoUrl == null) {
+            final localFile = File(localPhotoPath);
+            if (await localFile.exists()) {
+              try {
+                final selfieService = SelfieService();
+                photoUrl = await selfieService.uploadLocalPhoto(
+                  userId: item['user_id'],
+                  localPath: localPhotoPath,
+                );
+              } catch (e) {
+                debugPrint('[SyncService] Error uploading photo: $e');
+              }
+            }
+          }
+
           // Check if already exists in Supabase (by check_in_time + user_id)
           final existing = await _supabase
               .from('attendance')
@@ -188,27 +225,31 @@ class SyncService extends ChangeNotifier {
               .maybeSingle();
 
           if (existing != null) {
-            // Update existing record with check-out data if available
-            if (checkOutTime != null) {
-              await _supabase.from('attendance').update({
-                'check_out_time': item['check_out_time'],
-                'check_out_latitude': item['check_out_latitude'],
-                'check_out_longitude': item['check_out_longitude'],
-              }).eq('id', existing['id']);
-            }
+           // Update existing record with check-out data if available
+             if (checkOutTime != null) {
+               await _supabase.from('attendance').update({
+                 'check_out_time': item['check_out_time'],
+                 'check_out_latitude': item['check_out_latitude'],
+                 'check_out_longitude': item['check_out_longitude'],
+                 if (photoUrl != null) 'photo_url': photoUrl,
+                 if (item['work_status'] != null) 'work_status': item['work_status'],
+               }).eq('id', existing['id']);
+             }
           } else {
-            // Insert new record
-            await _supabase.from('attendance').insert({
-              'user_id': item['user_id'],
-              'check_in_time': item['check_in_time'],
-              'check_in_latitude': item['check_in_latitude'],
-              'check_in_longitude': item['check_in_longitude'],
-              'check_out_time': checkOutTime,
-              'check_out_latitude': checkOutTime != null ? item['check_out_latitude'] : null,
-              'check_out_longitude': checkOutTime != null ? item['check_out_longitude'] : null,
-              'is_mocked': item['is_mocked'] == 1,
-              'distance_from_office': item['distance_from_office'],
-            });
+             // Insert new record
+             await _supabase.from('attendance').insert({
+               'user_id': item['user_id'],
+               'check_in_time': item['check_in_time'],
+               'check_in_latitude': item['check_in_latitude'],
+               'check_in_longitude': item['check_in_longitude'],
+               'check_out_time': checkOutTime,
+               'check_out_latitude': checkOutTime != null ? item['check_out_latitude'] : null,
+               'check_out_longitude': checkOutTime != null ? item['check_out_longitude'] : null,
+               'is_mocked': item['is_mocked'] == 1,
+               'distance_from_office': item['distance_from_office'],
+               if (photoUrl != null) 'photo_url': photoUrl,
+               if (item['work_status'] != null) 'work_status': item['work_status'],
+             });
           }
 
           await _db.markAttendanceSynced(id);
@@ -299,44 +340,44 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  /// Get local attendance for today (combined: synced + pending)
-  Future<List<Map<String, dynamic>>> getTodayAttendance(String userId) async {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-    final results = <Map<String, dynamic>>[];
+   /// Get local attendance for today (combined: synced + pending)
+   Future<List<Map<String, dynamic>>> getTodayAttendance(String userId) async {
+     final today = DateTime.now().toIso8601String().substring(0, 10);
+     final results = <Map<String, dynamic>>[];
 
-    try {
-      // Get from Supabase (synced)
-      final synced = await _supabase
-          .from('attendance')
-          .select()
-          .eq('user_id', userId)
-          .gte('check_in_time', today)
-          .maybeSingle();
+     try {
+       // Get from Supabase (synced)
+       final synced = await _supabase
+           .from('attendance')
+           .select('id, user_id, check_in_time, check_in_latitude, check_in_longitude, check_out_time, check_out_latitude, check_out_longitude, is_mocked, distance_from_office, photo_url, work_status')
+           .eq('user_id', userId)
+           .gte('check_in_time', today)
+           .maybeSingle();
 
-      if (synced != null) results.add(synced);
+       if (synced != null) results.add(synced);
 
-      // Get from local (pending)
-      final pending = await _db.getAllPending();
-      final localToday = pending.where((p) {
-        final checkIn = p['check_in_time'] as String?;
-        if (checkIn == null) return false;
-        return checkIn.startsWith(today) && p['user_id'] == userId;
-      }).toList();
+       // Get from local (pending)
+       final pending = await _db.getAllPending();
+       final localToday = pending.where((p) {
+         final checkIn = p['check_in_time'] as String?;
+         if (checkIn == null) return false;
+         return checkIn.startsWith(today) && p['user_id'] == userId;
+       }).toList();
 
-      // If not in Supabase but in local, add from local
-      if (synced == null && localToday.isNotEmpty) {
-        final local = Map<String, dynamic>.from(localToday.first);
-        local['is_local'] = true;
-        local['local_id'] = local['id'];
-        results.add(local);
-      }
+       // If not in Supabase but in local, add from local
+       if (synced == null && localToday.isNotEmpty) {
+         final local = Map<String, dynamic>.from(localToday.first);
+         local['is_local'] = true;
+         local['local_id'] = local['id'];
+         results.add(local);
+       }
 
-      return results;
-    } catch (e) {
-      debugPrint('[SyncService] Error getting today attendance: $e');
-      return [];
-    }
-  }
+       return results;
+     } catch (e) {
+       debugPrint('[SyncService] Error getting today attendance: $e');
+       return [];
+     }
+   }
 
   @override
   void dispose() {

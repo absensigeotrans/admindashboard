@@ -42,3 +42,45 @@ npx supabase db push --include-all
 - Token login tersimpan di `~/.supabase/`, jadi cukup generate sekali.
 
 - Kalau error `Found local migration files to be inserted before the last migration`, jalankan dengan `--include-all`.
+
+---
+
+## Deploy & Setup Selfie Cleanup (Edge Function)
+
+Edge Function `cleanup_old_selfies` otomatis menghapus foto selfie >30 hari dari storage.
+
+### 1. Generate CRON_SECRET
+
+```bash
+# Generate random secret untuk keamanan endpoint
+openssl rand -hex 32
+# Atau pakai: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### 2. Deploy Edge Function
+
+```bash
+# Deploy function ke Supabase
+npx supabase functions deploy cleanup_old_selfies --no-verify-jwt
+
+# Set secret (ganti YOUR_CRON_SECRET dengan hasil generate di atas)
+npx supabase secrets set CRON_SECRET=YOUR_CRON_SECRET
+```
+
+### 3. Setup Cron Job (cron-job.org — FREE)
+
+1. Buka [cron-job.org](https://cron-job.org) → Register/Login
+2. Buat cron job baru:
+   - **URL:** `https://yoykktgggvvoigrbtvhq.supabase.co/functions/v1/cleanup_old_selfies`
+   - **Method:** `POST`
+   - **Headers:**
+     ```
+     Authorization: Bearer YOUR_CRON_SECRET
+     Content-Type: application/json
+     ```
+   - **Schedule:** Setiap hari (`Every day` atau `*/5 * * * *` untuk setiap 5 menit — cukup 1×/hari)
+3. Save
+
+### 4. Verifikasi
+
+Cek logs di Supabase Dashboard → **Edge Functions** → `cleanup_old_selfies` → **Logs** untuk melihat hasil eksekusi.

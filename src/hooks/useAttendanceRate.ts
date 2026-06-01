@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Attendance, Profile } from '@/types';
+import { getWIBDaysAgo, getWIBDate } from '@/lib/timezone';
 
 export type Period = '7d' | '30d' | 'custom';
 
@@ -50,14 +51,8 @@ export function useAttendanceRate(): UseAttendanceRateReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('30d');
-  const [customStart, setCustomStart] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
-  });
-  const [customEnd, setCustomEnd] = useState(() =>
-    new Date().toISOString().split('T')[0]
-  );
+  const [customStart, setCustomStart] = useState(() => getWIBDaysAgo(30));
+  const [customEnd, setCustomEnd] = useState(() => getWIBDate());
   const mountedRef = useRef(true);
 
   const compute = useCallback(async (from: string, to: string) => {
@@ -67,7 +62,7 @@ export function useAttendanceRate(): UseAttendanceRateReturn {
       const { data: employees, error: empErr } = await supabase
         .from('profiles')
         .select('id, full_name')
-        .in('role', ['viewer', 'driver', 'juru_parkir', 'ob'])
+        .in('role', ['viewer', 'driver_bebas', 'driver_kantor', 'juru_parkir', 'ob'])
         .order('full_name');
 
       if (empErr) throw empErr;
@@ -150,15 +145,11 @@ export function useAttendanceRate(): UseAttendanceRateReturn {
     let from: string;
     let to: string;
     if (period === '7d') {
-      const d = new Date();
-      d.setDate(d.getDate() - 7);
-      from = d.toISOString().split('T')[0];
-      to = new Date().toISOString().split('T')[0];
+      from = getWIBDaysAgo(7);
+      to = getWIBDate();
     } else if (period === '30d') {
-      const d = new Date();
-      d.setDate(d.getDate() - 30);
-      from = d.toISOString().split('T')[0];
-      to = new Date().toISOString().split('T')[0];
+      from = getWIBDaysAgo(30);
+      to = getWIBDate();
     } else {
       from = customStart;
       to = customEnd;

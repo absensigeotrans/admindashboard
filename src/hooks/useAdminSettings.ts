@@ -7,11 +7,21 @@ export interface AdminSettings {
   default_geofence_radius: number;
 }
 
+export interface ShiftConfig {
+  id: string;
+  shift_type: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  grace_minutes: number;
+  is_active: boolean;
+}
+
 const STORAGE_KEY = 'geoattend_admin_settings';
 
 const defaults: AdminSettings = {
-  late_threshold_hour: 9,
-  late_threshold_minute: 0,
+  late_threshold_hour: 7,
+  late_threshold_minute: 3,
   default_geofence_radius: 100,
 };
 
@@ -91,6 +101,38 @@ export function useAdminSettings() {
     setSynced(false);
   }, []);
 
+  // ── Shift Config ──────────────────────────────────────────
+  const [shifts, setShifts] = useState<ShiftConfig[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+
+  const fetchShifts = useCallback(async () => {
+    setShiftsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('shift_config')
+        .select('*')
+        .order('shift_type');
+      if (error) throw error;
+      setShifts(data ?? []);
+    } catch {
+      // silently fail
+    } finally {
+      setShiftsLoading(false);
+    }
+  }, []);
+
+  const updateShift = useCallback(async (shift_type: string, values: Partial<ShiftConfig>) => {
+    await supabase
+      .from('shift_config')
+      .update({
+        ...values,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('shift_type', shift_type);
+
+    setShifts(prev => prev.map(s => s.shift_type === shift_type ? { ...s, ...values } as ShiftConfig : s));
+  }, []);
+
   return {
     settings,
     loading,
@@ -98,5 +140,9 @@ export function useAdminSettings() {
     syncFromDB,
     updateSettings,
     resetSettings,
+    shifts,
+    shiftsLoading,
+    fetchShifts,
+    updateShift,
   };
 }

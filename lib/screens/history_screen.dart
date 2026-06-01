@@ -22,6 +22,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
   DateTime _endDate = DateTime.now();
 
+  Set<DateTime> get _attendedDates {
+    return _attendanceList
+        .map((a) {
+          final raw = a['check_in_time'] as String?;
+          if (raw == null) return null;
+          final dt = DateTime.parse(raw);
+          return DateTime(dt.year, dt.month, dt.day);
+        })
+        .whereType<DateTime>()
+        .toSet();
+  }
+
+  List<DateTime> _getAbsentDays() {
+    final weekdays = <DateTime>[];
+    for (var d = _startDate; !d.isAfter(_endDate); d = d.add(const Duration(days: 1))) {
+      if (d.weekday != DateTime.saturday && d.weekday != DateTime.sunday) {
+        weekdays.add(d);
+      }
+    }
+    final attended = _attendedDates;
+    return weekdays.where((d) => !attended.contains(d)).toList()
+      ..sort((a, b) => b.compareTo(a));
+  }
+
+  int get _absentCount => _getAbsentDays().length;
+
+  int get _presentCount => _attendanceList.where((a) => a['status'] == 'present' || a['status'] == 'outside_radius').length;
+
+  int get _lateCount => _attendanceList.where((a) => a['status'] == 'late').length;
+
   @override
   void initState() {
     super.initState();
@@ -212,25 +242,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
               children: [
                 _SummaryCard(
                   title: 'Total',
-                  value: '${_attendanceList.length}',
+                  value: '${_attendanceList.length + _absentCount}',
                   icon: Icons.receipt_long,
                   color: Colors.blue,
                 ),
                 const SizedBox(width: 12),
                 _SummaryCard(
                   title: 'Hadir',
-                  value:
-                      '${_attendanceList.where((a) => a['check_in_time'] != null).length}',
+                  value: '$_presentCount',
                   icon: Icons.check_circle,
                   color: Colors.green,
                 ),
                 const SizedBox(width: 12),
                 _SummaryCard(
                   title: 'Terlambat',
-                  value: '${_attendanceList.where((a) => a['status'] == 'late').length}',
+                  value: '$_lateCount',
                   icon: Icons.warning,
                   color: Colors.orange,
                 ),
+                if (_absentCount > 0)
+                  const SizedBox(width: 12),
+                if (_absentCount > 0)
+                  _SummaryCard(
+                    title: 'Absen',
+                    value: '$_absentCount',
+                    icon: Icons.cancel,
+                    color: Colors.red,
+                  ),
               ],
             ),
           ),
@@ -292,21 +330,113 @@ class _HistoryScreenState extends State<HistoryScreen> {
       onRefresh: _fetchAttendanceHistory,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _attendanceList.length,
+        itemCount: _attendanceList.length + _absentCount,
         itemBuilder: (context, index) {
-          final item = _attendanceList[index];
+          // Build merged list: attendance records + absent days, sorted by date descending
+          final allItems = <_ListItem>[];
+          for (final item in _attendanceList) {
+            allItems.add(_ListItem(
+              type: 'attendance',
+              date: DateTime.parse(item['check_in_time'] as String),
+              data: item,
+            ));
+          }
+          for (final d in _getAbsentDays()) {
+            allItems.add(_ListItem(
+              type: 'absent',
+              date: d,
+              data: d,
+            ));
+          }
+          allItems.sort((a, b) => b.date.compareTo(a.date));
+          final item = allItems[index];
+
+          if (item.type == 'absent') {
+            final d = item.data as DateTime;
+            return _AbsentCard(date: DateFormat('dd MMM yyyy').format(d));
+          }
+
+          final record = item.data as Map<String, dynamic>;
           return _AttendanceCard(
-            date: _formatDate(item['check_in_time']),
-            checkInTime: _formatTime(item['check_in_time']),
-            checkOutTime: _formatTime(item['check_out_time']),
-            distance: (item['distance_from_office'] as num?)?.toDouble() ?? 0,
-            isMocked: item['is_mocked'] == true,
+            status: record['status'] ?? 'present',
+            date: _formatDate(record['check_in_time']),
+            checkInTime: _formatTime(record['check_in_time']),
+            checkOutTime: _formatTime(record['check_out_time']),
+            distance: (record['distance_from_office'] as num?)?.toDouble() ?? 0,
+            isMocked: record['is_mocked'] == true,
             duration: _calculateWorkDuration(
-              item['check_in_time'],
-              item['check_out_time'],
+              record['check_in_time'],
+              record['check_out_time'],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ListItem {
+  final String type;
+  final DateTime date;
+  final dynamic data;
+  const _ListItem({required this.type, required this.date, required this.data});
+}
+
+class _AbsentCard extends StatelessWidget {
+  final String date;
+  const _AbsentCard({required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  date,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.withOpacity(0.4)),
+                  ),
+                  child: const Text(
+                    'Absen',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -359,6 +489,7 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _AttendanceCard extends StatelessWidget {
+  final String status;
   final String date;
   final String checkInTime;
   final String checkOutTime;
@@ -367,6 +498,7 @@ class _AttendanceCard extends StatelessWidget {
   final Duration? duration;
 
   const _AttendanceCard({
+    required this.status,
     required this.date,
     required this.checkInTime,
     required this.checkOutTime,
@@ -374,6 +506,24 @@ class _AttendanceCard extends StatelessWidget {
     required this.isMocked,
     this.duration,
   });
+
+  String get _statusLabel {
+    switch (status) {
+      case 'late':
+        return 'Terlambat';
+      default:
+        return 'Hadir';
+    }
+  }
+
+  Color get _statusColor {
+    switch (status) {
+      case 'late':
+        return Colors.orange;
+      default:
+        return Colors.green;
+    }
+  }
 
   String _formatDuration(Duration? duration) {
     if (duration == null) return '-';
@@ -407,6 +557,23 @@ class _AttendanceCard extends StatelessWidget {
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _statusColor.withOpacity(0.4)),
+                      ),
+                      child: Text(
+                        _statusLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _statusColor,
+                        ),
                       ),
                     ),
                   ],

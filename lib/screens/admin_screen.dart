@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/admin_service.dart';
 import '../services/auth_service.dart';
 import 'package:intl/intl.dart';
+import 'admin_report_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -18,7 +19,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AdminService>(context, listen: false).fetchAllUsers();
     });
@@ -51,16 +52,17 @@ class _AdminScreenState extends State<AdminScreen>
             },
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: [
-            Tab(text: 'Pending'),
-            Tab(text: 'Semua User'),
-          ],
-        ),
+         bottom: TabBar(
+           controller: _tabController,
+           indicatorColor: Colors.white,
+           labelColor: Colors.white,
+           unselectedLabelColor: Colors.white70,
+           tabs: [
+             Tab(text: 'Pending'),
+             Tab(text: 'Semua User'),
+             Tab(text: 'Laporan'),
+           ],
+         ),
       ),
       body: Consumer<AdminService>(
         builder: (context, adminService, child) {
@@ -86,55 +88,57 @@ class _AdminScreenState extends State<AdminScreen>
             );
           }
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              // Tab Pending
-              _UserListView(
-                users: adminService.pendingUsers,
-                emptyMessage: 'Tidak ada user menunggu persetujuan',
-                showApproveButton: true,
-                onApprove: (userId) async {
-                  final success = await adminService.approveUser(userId);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          success
-                              ? 'User berhasil diapprove'
-                              : 'Gagal approve user',
-                        ),
-                        backgroundColor:
-                            success ? Colors.green : Colors.red,
-                      ),
-                    );
-                  }
-                },
-              ),
-              // Tab Semua User
-              _UserListView(
-                users: adminService.allUsers,
-                emptyMessage: 'Belum ada user terdaftar',
-                showApproveButton: false,
-                onDeactivate: (userId) async {
-                  final success = await adminService.deactivateUser(userId);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          success
-                              ? 'User berhasil dinonaktifkan'
-                              : 'Gagal nonaktifkan user',
-                        ),
-                        backgroundColor:
-                            success ? Colors.green : Colors.red,
-                      ),
-                    );
-                  }
-                },
-              ),
-            ],
-          );
+           return TabBarView(
+             controller: _tabController,
+             children: [
+               // Tab Pending
+               _UserListView(
+                 users: adminService.pendingUsers,
+                 emptyMessage: 'Tidak ada user menunggu persetujuan',
+                 showApproveButton: true,
+                 onApprove: (userId) async {
+                   final success = await adminService.approveUser(userId);
+                   if (mounted) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                       SnackBar(
+                         content: Text(
+                           success
+                               ? 'User berhasil diapprove'
+                               : 'Gagal approve user',
+                         ),
+                         backgroundColor:
+                             success ? Colors.green : Colors.red,
+                       ),
+                     );
+                   }
+                 },
+               ),
+               // Tab Semua User
+               _UserListView(
+                 users: adminService.allUsers,
+                 emptyMessage: 'Belum ada user terdaftar',
+                 showApproveButton: false,
+                 onDeactivate: (userId) async {
+                   final success = await adminService.deactivateUser(userId);
+                   if (mounted) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                       SnackBar(
+                         content: Text(
+                           success
+                               ? 'User berhasil dinonaktifkan'
+                               : 'Gagal nonaktifkan user',
+                         ),
+                         backgroundColor:
+                             success ? Colors.green : Colors.red,
+                       ),
+                     );
+                   }
+                 },
+               ),
+               // Tab Laporan
+               const AdminReportScreen(),
+             ],
+           );
         },
       ),
     );

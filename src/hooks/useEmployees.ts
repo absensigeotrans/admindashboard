@@ -52,24 +52,27 @@ export function useEmployees() {
   }, []);
 
   const updateEmployee = useCallback(async (id: string, updates: EmployeeUpdate) => {
-    setLoading(true);
     try {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (updateError) throw updateError;
+      // Use API route with service_role to update both profiles and auth metadata
+      const res = await fetch('/api/admin/update-user-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: id,
+          ...updates,
+        }),
+      });
 
-      setEmployees((prev) =>
-        prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
-      );
-      return { success: true };
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Gagal update karyawan');
+      }
+
+      return { success: true, data: updates as Profile };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to update employee';
-      setError(msg);
       return { success: false, error: msg };
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -86,63 +89,27 @@ export function useEmployees() {
     return updateEmployee(id, { role: originalRole });
   }, [updateEmployee]);
 
-  // Create a new employee manually (admin function)
+  // Create a new employee via server API route (uses service_role key)
   const createEmployee = useCallback(async (data: CreateEmployeeData) => {
     setLoading(true);
     setError(null);
     try {
-      // 1. Check if email already exists
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', data.email.toLowerCase())
-        .maybeSingle();
-
-      if (existingUser) {
-        return { success: false, error: 'Email sudah digunakan oleh pengguna lain' };
-      }
-
-      // 2. Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: data.email.toLowerCase(),
-        password: data.password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: data.full_name,
-        },
+      const res = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
       });
 
-      if (authError) {
-        console.error('Auth create error:', authError);
-        return { success: false, error: authError.message };
-      }
+      const result = await res.json();
 
-      if (!authData.user) {
-        return { success: false, error: 'Gagal membuat user' };
-      }
-
-      // 3. Create profile
-      const { error: profileError } = await supabase.from('profiles').insert({
-        id: authData.user.id,
-        email: data.email.toLowerCase(),
-        full_name: data.full_name,
-        role: data.role,
-        shift_type: data.shift_type || null,
-        nik: data.nik || null,
-        employee_id: data.employee_id || null,
-      });
-
-      if (profileError) {
-        console.error('Profile create error:', profileError);
-        // Try to clean up the auth user
-        await supabase.auth.admin.deleteUser(authData.user.id);
-        return { success: false, error: profileError.message };
+      if (!res.ok) {
+        return { success: false, error: result.error || 'Gagal membuat karyawan' };
       }
 
       // Refresh employee list
       await fetchEmployees();
 
-      return { success: true, message: `Karyawan ${data.full_name} berhasil dibuat` };
+      return { success: true, message: result.message || `Karyawan ${data.full_name} berhasil dibuat` };
     } catch (err: any) {
       const msg = err?.message || 'Failed to create employee';
       setError(msg);
@@ -154,6 +121,7 @@ export function useEmployees() {
 
   return {
     employees,
+    setEmployees,
     loading,
     error,
     fetchEmployees,

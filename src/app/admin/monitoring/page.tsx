@@ -6,6 +6,7 @@ import { formatDistance } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { StatsCard } from '@/components/ui/StatsCard';
 import { format } from 'date-fns';
+import { getWIBStartOfDay, formatWIBTime, formatWIBTimeWithSeconds, formatWIBDateShort } from '@/lib/timezone';
 import { Radio, Clock, MapPin, Users, Activity, LogIn, LogOut, Wifi, WifiOff, Filter } from 'lucide-react';
 
 interface LiveAttendance {
@@ -57,7 +58,7 @@ export default function MonitoringPage() {
 
   // Fetch initial today's data
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const todayStart = getWIBStartOfDay();
 
     const fetchToday = async () => {
       setLoading(true);
@@ -66,7 +67,7 @@ export default function MonitoringPage() {
         const { data, error: fetchError } = await supabase
           .from('attendance')
           .select('*, profiles:user_id(full_name, employee_id, nik)')
-          .gte('check_in_time', today)
+          .gte('check_in_time', todayStart)
           .order('check_in_time', { ascending: false })
           .limit(200);
 
@@ -311,13 +312,13 @@ export default function MonitoringPage() {
                         {/* Check-in time */}
                         <span className="flex items-center gap-1">
                           <LogIn className="w-3 h-3 text-blue-500" />
-                          {format(new Date(record.check_in_time), 'HH:mm:ss')}
+                          {formatWIBTimeWithSeconds(record.check_in_time)}
                         </span>
                         {/* Check-out time */}
                         {record.check_out_time ? (
                           <span className="flex items-center gap-1">
                             <LogOut className="w-3 h-3 text-purple-500" />
-                            {format(new Date(record.check_out_time), 'HH:mm:ss')}
+                            {formatWIBTimeWithSeconds(record.check_out_time)}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-gray-400">
@@ -343,7 +344,7 @@ export default function MonitoringPage() {
                     )}
                     {/* Time since check-in */}
                     <span className="text-xs text-gray-400 shrink-0">
-                      {format(new Date(record.check_in_time), 'dd MMM')}
+                      {formatWIBDateShort(record.check_in_time)}
                     </span>
                   </div>
                 </div>

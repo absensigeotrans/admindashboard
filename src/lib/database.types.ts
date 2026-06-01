@@ -17,6 +17,9 @@ export interface Database {
           email: string;
           full_name: string;
           role: UserRole;
+          shift_type: 'morning' | 'afternoon' | null;
+          employee_id?: string;
+          nik?: string;
           created_at: string;
           updated_at: string;
         };
@@ -25,6 +28,9 @@ export interface Database {
           email: string;
           full_name: string;
           role?: UserRole;
+          shift_type?: 'morning' | 'afternoon' | null;
+          employee_id?: string;
+          nik?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -33,6 +39,9 @@ export interface Database {
           email?: string;
           full_name?: string;
           role?: UserRole;
+          shift_type?: 'morning' | 'afternoon' | null;
+          employee_id?: string;
+          nik?: string;
           created_at?: string;
           updated_at?: string;
         };

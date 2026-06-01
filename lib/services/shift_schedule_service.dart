@@ -89,5 +89,5 @@ class ShiftScheduleService {
 
 void _logDebug(String message) {
   // ignore: avoid_print
-  print(message);
+  // print(message);
 }

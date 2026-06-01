@@ -13,28 +13,34 @@ import { Table } from '@/components/ui/Table';
 import { toast } from '@/components/ui/Toast';
 import { Attendance, AttendanceStatus, ShiftType } from '@/types';
 import { format } from 'date-fns';
+import { getWIBDaysAgo, getWIBDate, formatWIBTime, formatWIBTimeWithSeconds, formatWIBDateDisplay } from '@/lib/timezone';
 import { formatDistance } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle, Database, Sun, Sunset, Trash2, Calendar } from 'lucide-react';
+import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle, Database, Sun, Sunset, Trash2, Calendar, Timer, FileSpreadsheet } from 'lucide-react';
 
 const PAGE_SIZE = 50;
+
+function formatDuration(minutes: number | null): string {
+  if (!minutes || minutes <= 0) return '—';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}h ${m}m`;
+}
 
 export default function ReportsPage() {
   const { profile } = useAuth();
   const { records, loading, fetchReportWithUsers, getStats, error, getShiftLabel, deleteByDate } = useReports();
 
-  const [from, setFrom] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
-  });
-  const [to, setTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [from, setFrom] = useState(() => getWIBDaysAgo(30));
+  const [to, setTo] = useState(() => getWIBDate());
   const [status, setStatus] = useState<AttendanceStatus | ''>('');
+  const [roleFilter, setRoleFilter] = useState<string>('');
   const [mockFilter, setMockFilter] = useState<string>('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [stats, setStats] = useState({ total: 0, present: 0, late: 0, outside: 0, suspicious: 0, avgDistance: 0 });
+  const [stats, setStats] = useState({ total: 0, present: 0, late: 0, outside: 0, suspicious: 0, avgDistance: 0, totalOvertime: 0 });
   const [exportLoading, setExportLoading] = useState(false);
   // Sorting state
   const [sortKey, setSortKey] = useState<string>('date');
@@ -45,8 +51,8 @@ export default function ReportsPage() {
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async (f = from, t = to, s = status, p = page, q = search) => {
-    // Driver role doesn't use geofencing, so exclude 'outside_radius' status
-    const isDriver = profile?.role === 'driver';
+    // driver_bebas doesn't use geofencing, so exclude 'outside_radius' status
+    const isDriver = profile?.role === 'driver_bebas';
     const result = await fetchReportWithUsers({
       from: f,
       to: t,
@@ -64,6 +70,15 @@ export default function ReportsPage() {
     let recs = mockFilter === 'suspicious'
       ? records.filter((r) => r.is_mocked)
       : records;
+
+    // Apply role filter
+    if (roleFilter === 'driver') {
+      recs = recs.filter((r) => r.profiles?.role === 'driver_bebas' || r.profiles?.role === 'driver_kantor');
+    } else if (roleFilter === 'ob') {
+      recs = recs.filter((r) => r.profiles?.role === 'ob');
+    } else if (roleFilter === 'juru_parkir') {
+      recs = recs.filter((r) => r.profiles?.role === 'juru_parkir');
+    }
 
     // Apply sorting
     recs = [...recs].sort((a, b) => {
@@ -90,12 +105,13 @@ export default function ReportsPage() {
     });
 
     return recs;
-  }, [records, mockFilter, sortKey, sortDir]);
+  }, [records, mockFilter, roleFilter, sortKey, sortDir]);
 
   // Update stats when filtered records change
   useEffect(() => {
     const computed = getStats(filteredRecords);
-    setStats(computed);
+    const totalOvertime = filteredRecords.reduce((s, r) => s + (r.overtime_minutes || 0), 0);
+    setStats({ ...computed, totalOvertime });
   }, [filteredRecords, getStats]);
 
   const handleFilter = () => {
@@ -104,15 +120,16 @@ export default function ReportsPage() {
   };
 
   const handleReset = () => {
-    setFrom(new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]);
-    setTo(new Date().toISOString().split('T')[0]);
+    setFrom(getWIBDaysAgo(30));
+    setTo(getWIBDate());
     setStatus('');
+    setRoleFilter('');
     setMockFilter('');
     setSearch('');
     setPage(1);
     setSortKey('date');
     setSortDir('desc');
-    load(new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0], new Date().toISOString().split('T')[0], '', 1, '');
+    load(getWIBDaysAgo(30), getWIBDate(), '', 1, '');
   };
 
   // Handle sort
@@ -127,19 +144,22 @@ export default function ReportsPage() {
 
   // CSV Export of currently displayed records
   const exportCSV = () => {
-    const headers = ['Employee', 'Date', 'Check-in Time', 'Check-out Time', 'Status', 'Shift', 'Distance', 'Lat', 'Lng', 'Suspicious'];
-    const rows = filteredRecords.map((r: any) => [
-      r.profiles?.full_name || '',
-      format(new Date(r.check_in_time), 'yyyy-MM-dd'),
-      format(new Date(r.check_in_time), 'HH:mm:ss'),
-      r.check_out_time ? format(new Date(r.check_out_time), 'HH:mm:ss') : '',
-      r.status,
-      getShiftLabel(r.shift_type),
-      (r.distance_from_office || 0).toFixed(2) + 'm',
-      r.check_in_latitude || '',
-      r.check_in_longitude || '',
-      r.is_mocked ? 'YES' : 'NO',
-    ]);
+    const headers = ['Employee', 'Date', 'Check-in Time', 'Check-out Time', 'Jam Kerja', 'Lembur', 'Status', 'Shift', 'Distance', 'Lat', 'Lng', 'Work Status', 'Suspicious'];
+     const rows = filteredRecords.map((r: any) => [
+       r.profiles?.full_name || '',
+       formatWIBDateDisplay(r.check_in_time).replace(/ /g, '-'),
+       formatWIBTimeWithSeconds(r.check_in_time),
+       r.check_out_time ? formatWIBTimeWithSeconds(r.check_out_time) : '',
+       formatDuration(r.work_duration_minutes),
+       formatDuration(r.overtime_minutes),
+       r.status,
+       getShiftLabel(r.shift_type),
+       (r.distance_from_office || 0).toFixed(2) + 'm',
+       r.check_in_latitude || '',
+       r.check_in_longitude || '',
+       r.work_status ?? '-',
+       r.is_mocked ? 'YES' : 'NO',
+     ]);
     const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -157,15 +177,17 @@ export default function ReportsPage() {
     doc.setFontSize(16);
     doc.text(title, 14, 16);
     doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleString('id-ID')}`, 14, 23);
+    doc.text(`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`, 14, 23);
     doc.text(`Total: ${stats.total} | Present: ${stats.present} | Late: ${stats.late} | Outside: ${stats.outside} | Avg: ${formatDistance(stats.avgDistance)}`, 14, 30);
 
-    const headers = [['Employee', 'Date', 'Check-in', 'Check-out', 'Status', 'Shift', 'Distance', 'Coordinates', 'Suspicious']];
+     const headers = [['Employee', 'Date', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur', 'Status', 'Shift', 'Distance', 'Coordinates', 'Work Status', 'Suspicious']];
     const rows = filteredRecords.map((r: any) => [
       r.profiles?.full_name || '—',
-      format(new Date(r.check_in_time), 'dd MMM yyyy'),
-      format(new Date(r.check_in_time), 'HH:mm'),
-      r.check_out_time ? format(new Date(r.check_out_time), 'HH:mm') : '—',
+      formatWIBDateDisplay(r.check_in_time),
+      formatWIBTime(r.check_in_time),
+      r.check_out_time ? formatWIBTime(r.check_out_time) : '—',
+      formatDuration(r.work_duration_minutes),
+      formatDuration(r.overtime_minutes),
       r.status.replace('_', ' '),
       getShiftLabel(r.shift_type),
       formatDistance(r.distance_from_office || 0),
@@ -186,9 +208,132 @@ export default function ReportsPage() {
     toast.success(`Exported ${filteredRecords.length} records`);
   };
 
+  const exportXLSX = async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Admin';
+    const ws = wb.addWorksheet('Attendance Report');
+
+    const statusDisplay: Record<string, string> = {
+      present: 'Hadir',
+      late: 'Terlambat',
+      outside_radius: 'Luar Area',
+    };
+
+     ws.columns = [
+       { width: 22 },
+       { width: 14 },
+       { width: 14 },
+       { width: 14 },
+       { width: 14 },
+       { width: 12 },
+       { width: 14 },
+       { width: 12 },
+       { width: 14 },
+       { width: 14 },
+       { width: 14 },
+       { width: 14 }, // Work Status
+       { width: 14 },
+       { width: 18 },
+     ];
+
+    const borderThin = {
+      top: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+      left: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+      bottom: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+      right: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+    };
+
+    const r1 = ws.addRow([`Attendance Report (${from} to ${to})`]);
+    ws.mergeCells(1, 1, 1, 13);
+    r1.font = { bold: true, size: 14, color: { argb: 'FFFFFF' } };
+    r1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
+    r1.alignment = { vertical: 'middle', horizontal: 'left' };
+    r1.height = 32;
+
+    const r2 = ws.addRow([`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`]);
+    ws.mergeCells(2, 1, 2, 13);
+    r2.font = { size: 11, italic: true, color: { argb: '6B7280' } };
+    r2.height = 22;
+
+    ws.addRow([]);
+
+     const headerRow = ws.addRow([
+       'Employee', 'Date', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur',
+       'Status', 'Shift', 'Distance', 'Lat', 'Lng', 'Work Status', 'Role', 'Suspicious',
+     ]);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFF' }, size: 11 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    headerRow.height = 24;
+    headerRow.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' },
+      };
+    });
+
+    for (const r of filteredRecords) {
+      const statusColor: Record<string, { bg: string; fg: string }> = {
+        present: { bg: 'DCFCE7', fg: '166534' },
+        late: { bg: 'FFEDD5', fg: '9A3412' },
+        outside_radius: { bg: 'DBEAFE', fg: '1E40AF' },
+      };
+      const colors = statusColor[r.status] || { bg: 'F3F4F6', fg: '374151' };
+
+      const row = ws.addRow([
+        r.profiles?.full_name || '',
+        formatWIBDateDisplay(r.check_in_time),
+        formatWIBTime(r.check_in_time),
+        r.check_out_time ? formatWIBTime(r.check_out_time) : '',
+        formatDuration(r.work_duration_minutes ?? null),
+        formatDuration(r.overtime_minutes ?? null),
+        statusDisplay[r.status] || r.status,
+        getShiftLabel(r.shift_type),
+        formatDistance(r.distance_from_office || 0),
+        r.check_in_latitude || '',
+        r.check_in_longitude || '',
+        r.profiles?.role || '',
+        r.is_mocked ? 'YES' : 'NO',
+      ]);
+
+      row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.bg } };
+      row.getCell(7).font = { color: { argb: colors.fg } };
+      row.getCell(13).font = r.is_mocked ? { color: { argb: 'DC2626' }, bold: true } : {};
+
+      row.eachCell((cell, colIdx) => {
+        if (colIdx !== 7 && colIdx !== 13) {
+          cell.border = borderThin;
+        } else {
+          cell.border = borderThin;
+        }
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      row.height = 20;
+    }
+
+    ws.addRow([]);
+    const sr = ws.addRow([`Total: ${filteredRecords.length} records`]);
+    ws.mergeCells(sr.number, 1, sr.number, 13);
+    sr.font = { italic: true, size: 10, color: { argb: '6B7280' } };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `attendance_report_${from}_to_${to}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${filteredRecords.length} records`);
+  };
+
   // Open delete modal
   const openDeleteModal = () => {
-    setDeleteDate(new Date().toISOString().split('T')[0]);
+    setDeleteDate(getWIBDate());
     setShowDeleteModal(true);
   };
 
@@ -208,7 +353,7 @@ export default function ReportsPage() {
       load(from, to, status, 1, search);
       // Show success with count
       if (result.count === 0) {
-        toast.warning('Tidak ada data kehadiran untuk tanggal tersebut');
+        toast.info('Tidak ada data kehadiran untuk tanggal tersebut');
       } else {
         toast.success(result.message || `Berhasil menghapus ${result.count} data`);
       }
@@ -234,19 +379,34 @@ export default function ReportsPage() {
       key: 'date',
       header: 'Date',
       sortable: true,
-      render: (row: any) => format(new Date(row.check_in_time), 'dd MMM yyyy'),
+      render: (row: any) => formatWIBDateDisplay(row.check_in_time),
     },
     {
       key: 'time',
       header: 'Check-in',
       sortable: true,
-      render: (row: any) => format(new Date(row.check_in_time), 'HH:mm'),
+      render: (row: any) => formatWIBTime(row.check_in_time),
     },
     {
       key: 'check_out',
       header: 'Check-out',
       sortable: true,
-      render: (row: any) => row.check_out_time ? format(new Date(row.check_out_time), 'HH:mm') : '—',
+      render: (row: any) => row.check_out_time ? formatWIBTime(row.check_out_time) : '—',
+    },
+    {
+      key: 'work_duration',
+      header: 'Jam Kerja',
+      render: (row: any) => formatDuration(row.work_duration_minutes),
+    },
+    {
+      key: 'overtime',
+      header: 'Lembur',
+      sortable: true,
+      render: (row: any) => (
+        <span className={row.overtime_minutes > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}>
+          {formatDuration(row.overtime_minutes)}
+        </span>
+      ),
     },
     {
       key: 'status',
@@ -283,10 +443,22 @@ export default function ReportsPage() {
       },
     },
     {
-      key: 'distance',
-      header: 'Distance',
-      sortable: true,
-      render: (row: any) => formatDistance(row.distance_from_office || 0),
+      key: 'work_status',
+      header: 'Work Status',
+      render: (row: any) => {
+        const ws = row.work_status || '—';
+        const map: Record<string, string> = {
+          WFO: 'text-blue-700 bg-blue-100',
+          WFH: 'text-green-700 bg-green-100',
+          DINAS: 'text-purple-700 bg-purple-100',
+          LAINNYA: 'text-gray-700 bg-gray-100',
+        };
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${map[ws] || 'text-gray-700 bg-gray-100'}`}>
+            {ws}
+          </span>
+        );
+      },
     },
     {
       key: 'location',
@@ -324,11 +496,25 @@ export default function ReportsPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as AttendanceStatus | '')}
-              className="w-full px-3 py-2.5 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Status</option>
               <option value="present">Present</option>
               <option value="late">Late</option>
+            </select>
+          </div>
+          {/* Role Filter */}
+          <div className="w-full lg:w-48">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Role</label>
+            <select
+              value={roleFilter}
+              onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Roles</option>
+              <option value="driver">Driver</option>
+              <option value="ob">OB</option>
+              <option value="juru_parkir">Juru Parkir</option>
             </select>
           </div>
           {/* Location Anomaly Filter */}
@@ -337,7 +523,7 @@ export default function ReportsPage() {
             <select
               value={mockFilter}
               onChange={(e) => { setMockFilter(e.target.value); setPage(1); }}
-              className="w-full px-3 py-2.5 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Semua Records</option>
               <option value="suspicious">Hanya Kejanggalan</option>
@@ -356,6 +542,9 @@ export default function ReportsPage() {
           </Button>
           <Button variant="secondary" onClick={exportPDF}>
             <FileDown className="w-4 h-4" /> Export PDF ({filteredRecords.length})
+          </Button>
+          <Button variant="secondary" onClick={exportXLSX}>
+            <FileSpreadsheet className="w-4 h-4" /> Export XLSX ({filteredRecords.length})
           </Button>
           {filteredRecords.length > 1000 && (
             <span className="flex items-center gap-1 text-xs text-yellow-600 ml-2">
@@ -385,6 +574,7 @@ export default function ReportsPage() {
         <StatsCard icon={<CheckCircle className="w-5 h-5" />} value={stats.present} label="Present" color="green" />
         <StatsCard icon={<Clock className="w-5 h-5" />} value={stats.late} label="Late" color="yellow" />
         <StatsCard icon={<AlertTriangle className="w-5 h-5" />} value={stats.suspicious} label="Kejanggalan" color="red" />
+        <StatsCard icon={<Timer className="w-5 h-5" />} value={formatDuration(stats.totalOvertime)} label="Total Lembur" color="orange" />
       </div>
 
       {/* Table with Sort Handler */}
@@ -436,7 +626,7 @@ export default function ReportsPage() {
                   value={deleteDate}
                   onChange={(e) => setDeleteDate(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  max={new Date().toISOString().split('T')[0]}
+                  max={getWIBDate()}
                 />
               </div>
 
@@ -444,7 +634,7 @@ export default function ReportsPage() {
                 <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
                   <p className="text-sm text-yellow-800">
                     <strong>Catatan:</strong> Data kehadiran untuk tanggal{' '}
-                    <strong>{format(new Date(deleteDate + 'T00:00:00'), 'dd MMMM yyyy')}</strong>{' '}
+                    <strong>{formatWIBDateDisplay(deleteDate + 'T00:00:00')}</strong>{' '}
                     akan dihapus secara permanen.
                   </p>
                 </div>

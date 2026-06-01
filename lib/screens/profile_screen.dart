@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
-import '../services/biometric_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,12 +10,10 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _biometricService = BiometricService();
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _nikController = TextEditingController();
 
-  bool _biometricEnabled = false;
   bool _isSaving = false;
   bool _isEditing = false;
 
@@ -31,9 +28,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final p = auth.profile;
     _nameController.text = p?['full_name'] ?? '';
     _nikController.text = p?['employee_id'] ?? '';
-    _biometricService.isFeatureEnabled().then((v) {
-      if (mounted) setState(() => _biometricEnabled = v);
-    });
   }
 
   Future<void> _saveProfile() async {
@@ -127,17 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _toggleBiometric(bool value) async {
-    if (value) {
-      final auth = Provider.of<AuthService>(context, listen: false);
-      final email = auth.user?.email ?? '';
-      await _biometricService.saveCredentials(email, '');
-      setState(() => _biometricEnabled = true);
-    } else {
-      await _biometricService.clearCredentials();
-      setState(() => _biometricEnabled = false);
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -271,28 +255,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 16),
 
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    title: const Text('Login Biometric'),
-                    subtitle: Text(_biometricEnabled ? 'Aktif' : 'Nonaktif'),
-                    secondary: Icon(Icons.fingerprint, color: _biometricEnabled ? Colors.blue : Colors.grey),
-                    value: _biometricEnabled,
-                    onChanged: _toggleBiometric,
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.lock_reset, color: Colors.orange),
-                    title: const Text('Ganti Password'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: _showChangePasswordDialog,
-                  ),
-                ],
-              ),
-            ),
+             Card(
+               elevation: 2,
+               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+               child: Column(
+                 children: [
+                   ListTile(
+                     leading: const Icon(Icons.lock_reset, color: Colors.orange),
+                     title: const Text('Ganti Password'),
+                     trailing: const Icon(Icons.chevron_right),
+                     onTap: _showChangePasswordDialog,
+                   ),
+                 ],
+               ),
+             ),
 
             const SizedBox(height: 16),
 

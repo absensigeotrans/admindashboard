@@ -1,29 +1,33 @@
 # Progress Report — GeoAttend Pro
 
 **Project:** GeoAttend Pro - Pertamina Trans Kontinental Edition
-**Last Updated:** 2026-05-19
+**Last Updated:** 2026-05-26
 **Overall Status:** In Development
 
 ---
 
-## Overall Progress: 93%
+## Overall Progress: 96%
 
 | Category | Progress |
 |----------|----------|
 | Frontend Development (Web Admin) | ✅ 100% |
-| Backend / Database (Supabase) | ✅ 98% |
-| Authentication | ✅ 85% |
-| Geofencing Engine | ✅ 95% |
+| Backend / Database (Supabase) | ✅ 100% |
+| Authentication | ✅ 90% |
+| Geofencing Engine | ✅ 98% |
 | HR Dashboard & Admin Panel | ✅ 100% |
-| Mobile App (Flutter) | ✅ 96% |
+| Mobile App (Flutter) | ✅ 100% |
+| Selfie Attendance | ✅ 100% |
+| Overtime Calculation | ✅ 100% |
+| Driver Role Split (Bebas/Kantor) | ✅ 100% |
+| Exception Dates (Holiday/Off) | ✅ 100% |
 | Web Anti-Fraud (Mock Location) | ✅ 75% |
-| Configuration & Setup | ✅ 85% |
+| Configuration & Setup | ✅ 90% |
 | Late Attendance & Shift System | ✅ 100% |
 | Daily Shift Selection (Juru Parkir) | ✅ 100% |
 | CI/CD Pipeline | ✅ 80% |
 | Testing | ❌ 0% |
 | Deployment | ❌ 0% |
-| Documentation | ⚠️ 50% |
+| Documentation | ⚠️ 60% |
 
 ---
 
@@ -59,11 +63,15 @@
 - [x] Offices management
 - [x] Settings
 
-### 5. Mobile App (Flutter) ✅ (95%)
+### 5. Mobile App (Flutter) ✅ (100%)
 - [x] Attendance capture
 - [x] Location tracking
 - [x] Statistics & Profile
 - [x] Forgot password
+- [x] Selfie camera with auto-capture & countdown
+- [x] Selfie compression (~20KB) with offline fallback
+- [x] Login screen overhaul
+- [x] Enhanced history screen
 
 ---
 
@@ -384,4 +392,235 @@ const { error: profileError } = await supabase.from('profiles').insert({
 
 ---
 
-*Last updated: 2026-05-19 (v5 — Admin Reports Delete + Manual Employee Add)*
+## 📋 TAHAP 15: SELFIE ATTENDANCE & STORAGE OPTIMIZATION
+
+### Requirement Analysis
+
+**Target:**
+- Setiap absensi wajib foto selfie (kamera depan) sebagai bukti kehadiran
+- Optimasi storage Supabase free tier (1 GB) untuk ~100 user
+- Foto otomatis dihapus >30 hari
+
+**Alur:**
+1. User tap Check-In → kamera depan terbuka otomatis
+2. Countdown 2 detik → auto-capture
+3. Kompresi gambar → ~15-20 KB
+4. Upload ke Supabase Storage bucket `selfie_absensi`
+5. URL foto tersimpan di kolom `photo_url` tabel `attendance`
+6. Jika offline → simpan lokal, upload saat online
+
+---
+
+### Implementation Plan
+
+#### Phase 1: Backend (Database & Storage) ✅
+
+- [x] **15.1** Migrasi `1005_add_selfie_attendance.sql`
+  - Tambah kolom `photo_url TEXT` di `attendance`
+  - Buat storage bucket `selfie_absensi` (public, max 25KB)
+  - RLS policies: user upload own selfie, admin read all
+
+- [x] **15.2** Storage Optimization
+  - Kompresi: quality 20, resolusi 480×360 → target ~15-20KB
+  - File size limit bucket: 25600 bytes (25KB)
+
+#### Phase 2: Flutter - Selfie Service ✅
+
+- [x] **15.3** `lib/services/selfie_service.dart` (NEW)
+  - `getFrontCamera()` — deteksi kamera depan
+  - `compressImage()` — kompresi progresif dengan target ≤25KB
+  - `uploadPhoto()` — upload ke Supabase Storage
+  - `captureAndUpload()` — full flow: capture → compress → upload (online) / save lokal (offline)
+  - `uploadLocalPhoto()` — upload foto offline setelah online
+
+- [x] **15.4** `lib/widgets/selfie_camera_overlay.dart` (NEW)
+  - Inisialisasi kamera depan otomatis
+  - Countdown 2 detik dengan animasi circular progress
+  - Auto-capture setelah countdown
+  - Loading state saat kompresi/upload
+  - Error handling: tombol "Coba Lagi" atau "Lanjut Tanpa Foto"
+  - Dialog konfirmasi jika user tutup sebelum capture
+
+#### Phase 3: Retention Policy ✅
+
+- [x] **15.5** Edge Function `cleanup_old_selfies`
+  - Path: `supabase/functions/cleanup_old_selfies/index.ts`
+  - Dipanggil via cron-job.org (gratis) — setiap hari
+  - Hapus semua foto selfie >30 hari dari storage bucket
+  - Dilindungi CRON_SECRET header
+  - Return summary (jumlah deleted, bytes freed)
+
+---
+
+### Storage Impact Analysis
+
+| Metrik | Sebelum Optimasi | Sesudah Optimasi |
+|--------|------------------|------------------|
+| Per foto | ~50 KB | **~15-20 KB** |
+| Storage/bulan (100 user × 22 hari) | ~107 MB | **~33-44 MB** |
+| Tanpa retention policy | ~9 bulan penuh | **~2 tahun penuh** |
+| Dengan retention 30 hari | ❌ | **Stabil ~33 MB** |
+
+---
+
+### Files Modified/Created
+
+| File | Action | Description |
+|------|--------|-------------|
+| `supabase/migrations/1005_add_selfie_attendance.sql` | NEW | Kolom photo_url, bucket, RLS |
+| `lib/services/selfie_service.dart` | NEW | Full selfie service dengan kompresi |
+| `lib/widgets/selfie_camera_overlay.dart` | NEW | Auto-capture overlay dengan countdown |
+| `supabase/functions/cleanup_old_selfies/index.ts` | NEW | Edge Function retensi 30 hari |
+| `PUSH_DATABASE.md` | UPDATED | Panduan deploy EF + cron-job |
+
+---
+
+## 📋 TAHAP 16: OVERTIME CALCULATION
+
+### Requirement Analysis
+
+**Target:**
+- Hitung durasi kerja dan lembur otomatis saat checkout
+- Aturan lembur: minimal 15 menit lebih dari jam shift sebelum dihitung
+- Weekend: tidak ada lembur
+
+**Shift Config:**
+| Shift | Start | End | Grace |
+|-------|-------|-----|-------|
+| Pagi | 06:00 | 14:00 | 3 menit |
+| Siang | 10:00 | 18:00 | 3 menit |
+| Full Time | 07:00 | 16:00 | 3 menit |
+| Non-Shifting | 07:00 | 16:00 | 3 menit |
+
+---
+
+### Implementation Plan ✅
+
+- [x] **16.1** Migration `1011_overtime_calculation.sql`
+  - Buat table `shift_config` dengan 4 shift tetap
+  - Seed data pagi, siang, full_time, non_shifting
+  - RLS: admin manage, all users view
+  - Tambah `overtime_minutes INTEGER` dan `work_duration_minutes INTEGER` di `attendance`
+
+- [x] **16.2** Update trigger geofence saat checkout
+  - Hitung `work_duration = check_out - check_in` (menit)
+  - Hitung `overtime = max(0, check_out - shift_end - 15 menit minimum)`
+  - Weekend: overtime = 0
+  - Pakai timezone WIB (+7)
+
+---
+
+### Files Modified
+
+| File | Description |
+|------|-------------|
+| `supabase/migrations/1011_overtime_calculation.sql` | NEW - shift_config + overtime logic |
+
+---
+
+## 📋 TAHAP 17: DRIVER ROLE SPLIT
+
+### Requirement Analysis
+
+**Target:** Split role `driver` menjadi dua tipe dengan aturan geofence berbeda
+
+| Role | Geofence | Late Check | Overtime |
+|------|----------|------------|----------|
+| `driver_bebas` | ❌ Bypass (bisa absen di mana saja) | ✅ | ✅ |
+| `driver_kantor` | ✅ Wajib dalam radius kantor | ✅ | ✅ |
+
+**Alur:**
+1. Semua driver existing → migrasi ke `driver_bebas`
+2. Admin bisa ubah role di employee management
+3. Backend trigger bedakan validasi geofence berdasarkan role
+
+---
+
+### Implementation Plan ✅
+
+- [x] **17.1** Migration `1012_split_driver_role.sql`
+  - Add enum values: `driver_bebas`, `driver_kantor`
+  - Migrasi existing driver → `driver_bebas`
+  - Update `validate_attendance_geofence()` trigger
+    - `driver_bebas`: skip geofence validation, tetap kena late check
+    - `driver_kantor`: geofence enforced seperti biasa
+
+- [x] **17.2** Sync role to auth.users
+  - Migration `1013_sync_profile_role_to_auth.sql`
+  - Update `raw_user_meta_data` di `auth.users` setiap kali role di profile berubah
+
+---
+
+### Files Modified
+
+| File | Description |
+|------|-------------|
+| `supabase/migrations/1012_split_driver_role.sql` | NEW - Split driver + trigger update |
+| `supabase/migrations/1013_sync_profile_role_to_auth.sql` | NEW - Sync role ke auth metadata |
+
+---
+
+## 📋 TAHAP 18: EXCEPTION DATES (HARI LIBUR & OFF)
+
+### Requirement Analysis
+
+**Target:** Admin bisa menandai tanggal tertentu sebagai hari libur/off
+- **Global:** Berlaku untuk semua karyawan
+- **Per-user:** Hari off individu (izin tidak masuk)
+
+**Dampak:**
+- Tanggal exception diperlakukan seperti weekend
+- Skip late check (status tetap `present`)
+- Tidak ada kalkulasi overtime
+
+---
+
+### Implementation Plan ✅
+
+- [x] **18.1** Migration `1014_exception_dates.sql`
+  - Buat `global_exception_dates` table
+  - Buat `user_exception_dates` table
+  - Unique index per date (global) dan per user+date
+  - RLS: admin full access, authenticated can read
+
+- [x] **18.2** Update trigger untuk skip exception dates
+  - Cek global_exception_dates + user_exception_dates
+  - Jika ada → skip late check, status = present
+
+---
+
+### Files Modified
+
+| File | Description |
+|------|-------------|
+| `supabase/migrations/1014_exception_dates.sql` | NEW - Exception dates tables + RLS |
+
+---
+
+## 📋 TAHAP 19: WEB ADMIN ENHANCEMENTS
+
+### Implementation Plan ✅
+
+- [x] **19.1** New Employee Dashboard (`/dashboard`)
+  - Layout dengan sidebar
+  - Halaman monitoring, reports, attendance-rate
+
+- [x] **19.2** Monthly Recap (`/admin/monthly-recap`)
+  - Rekap absensi bulanan dengan tabel lengkap
+  - Filter per bulan, status hadir/late/izin/dll
+
+- [x] **19.3** Reports Page Enhancement
+  - Delete attendance by date
+  - Tambah kolom shift, overtime, work duration
+  - Perbaikan filter dan export
+
+- [x] **19.4** Timezone Utility (`src/lib/timezone.ts`)
+  - Konversi WIB (+7)
+  - Helper formatting tanggal
+
+- [x] **19.5** Supabase Admin Client (`src/lib/supabase-admin.ts`)
+  - Service role client untuk operasi admin (create user, dll)
+
+---
+
+*Last updated: 2026-05-26 (v6 — Selfie, Overtime, Driver Split, Exception Dates, Web Enhancements)*

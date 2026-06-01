@@ -40,6 +40,52 @@ class AdminService extends ChangeNotifier {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchAttendanceRecords({
+    String? userId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? workStatus,
+  }) async {
+    try {
+      var query = _supabase.from('attendance').select(
+        '''
+        id,
+        user_id,
+        check_in_time,
+        check_out_time,
+        work_status,
+        distance_from_office,
+        is_mocked,
+        status,
+        overtime_minutes,
+        work_duration_minutes
+      '''
+      );
+
+      if (userId != null && userId.isNotEmpty) {
+        query = query.eq('user_id', userId);
+      }
+
+      if (startDate != null) {
+        query = query.gte('check_in_time', '${startDate.toIso8601String().substring(0, 10)} 00:00:00');
+      }
+
+      if (endDate != null) {
+        query = query.lte('check_in_time', '${endDate.toIso8601String().substring(0, 10)} 23:59:59');
+      }
+
+      if (workStatus != null && workStatus.isNotEmpty) {
+        query = query.eq('work_status', workStatus);
+      }
+
+      final data = await query.order('check_in_time', ascending: false);
+
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<bool> toggleUserActive(String userId, bool isActive) async {
     try {
       await _supabase

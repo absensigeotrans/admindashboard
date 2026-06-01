@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getWIBDate, getWIBDaysAgo } from '@/lib/timezone';
 
 export interface StatusDistribution {
   present: number;
@@ -40,21 +41,16 @@ export function useDashboardAnalytics() {
   const [customEnd, setCustomEnd] = useState<string>('');
 
   const getDateRange = useCallback(() => {
-    const now = new Date();
-    const end = now.toISOString().split('T')[0];
+    const end = getWIBDate();
 
     if (period === 'today') {
       return { start: end, end };
     }
     if (period === '7d') {
-      const start = new Date(now);
-      start.setDate(start.getDate() - 6);
-      return { start: start.toISOString().split('T')[0], end };
+      return { start: getWIBDaysAgo(6), end };
     }
     if (period === '30d') {
-      const start = new Date(now);
-      start.setDate(start.getDate() - 29);
-      return { start: start.toISOString().split('T')[0], end };
+      return { start: getWIBDaysAgo(29), end };
     }
     return { start: customStart || end, end: customEnd || end };
   }, [period, customStart, customEnd]);

@@ -18,7 +18,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _passwordController = TextEditingController();
   
   String _selectedRole = 'juru_parkir';
-  final List<String> _roles = ['driver', 'juru_parkir', 'ob'];
+  final List<String> _roles = ['driver_bebas', 'driver_kantor', 'juru_parkir', 'ob'];
 
   void _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
@@ -30,7 +30,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       fullName: _nameController.text.trim(),
       employeeId: _employeeIdController.text.trim(),
       role: _selectedRole,
-      shiftType: widget.shiftType ?? '',
+      shiftType: (widget.shiftType?.isNotEmpty == true) ? widget.shiftType! : 'non_shifting',
     );
 
     if (error != null) {

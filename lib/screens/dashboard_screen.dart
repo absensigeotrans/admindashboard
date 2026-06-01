@@ -11,6 +11,8 @@ import '../services/office_service.dart';
 import '../services/sync_service.dart';
 import '../services/notification_service.dart';
 import '../services/shift_schedule_service.dart';
+import '../services/selfie_service.dart';
+import '../widgets/selfie_camera_overlay.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'history_screen.dart';
 import 'leave_request_screen.dart';
@@ -35,6 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _todayAttendance;
   int? _localAttendanceId;
   bool _isLocationReady = false;
+  bool _isLocationServiceEnabled = true;
   Timer? _distanceUpdateTimer;
   String _todayShift = '';
 
@@ -45,7 +48,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadUserData();
     _fetchTodayAttendance();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndRequestPermission();
+      _checkLocationServiceEnabled().then((_) {
+        _checkAndRequestPermission();
+      });
     });
   }
 
@@ -59,6 +64,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() {
           _todayShift = todayShift ?? '';
         });
+        // Auto-prompt shift selection for Juru Parkir who haven't selected
+        final role = Provider.of<AuthService>(context, listen: false).profile?['role'] ?? '';
+        if (role == 'juru_parkir' && todayShift == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (mounted) {
+              await _showShiftSelectionDialog(user.id);
+              // Re-fetch shift after selection to update UI
+              final newShift = await shiftService.getTodayShift(user.id);
+              if (mounted) {
+                setState(() {
+                  _todayShift = newShift ?? '';
+                });
+              }
+            }
+          });
+        }
       }
     }
   }
@@ -84,6 +105,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _checkLocationServiceEnabled() async {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (mounted) {
+      setState(() => _isLocationServiceEnabled = enabled);
+      if (!enabled) {
+        _showEnableLocationDialog();
+      }
+    }
+  }
+
+  Future<void> _showEnableLocationDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (alertContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.location_off, color: Colors.red, size: 28),
+            const SizedBox(width: 8),
+            const Text('Lokasi Tidak Aktif'),
+          ],
+        ),
+        content: const Text(
+          'Untuk melakukan absensi, Anda perlu mengaktifkan layanan lokasi.\n\n'
+          'Harap aktifkan lokasi di pengaturan perangkat dan kembali ke aplikasi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(alertContext).pop(),
+            child: const Text('Nanti'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.settings),
+            onPressed: () async {
+              await Geolocator.openLocationSettings();
+              if (alertContext.mounted) Navigator.of(alertContext).pop();
+            },
+            label: const Text('Buka Pengaturan'),
+          ),
+        ],
+      ),
+    );
+    // Re-check after dialog
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (mounted) {
+      setState(() => _isLocationServiceEnabled = enabled);
+    }
+  }
+
   Future<void> _loadOffice() async {
     final officeService = Provider.of<OfficeService>(context, listen: false);
     await officeService.fetchOffice();
@@ -106,6 +177,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       final locationService = Provider.of<LocationService>(context, listen: false);
+
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        if (mounted) setState(() => _isLocationServiceEnabled = false);
+        return;
+      }
+      if (mounted) setState(() => _isLocationServiceEnabled = true);
+
       await locationService.updateDistance(_officeLat, _officeLon, _radius);
 
       if (locationService.currentLocation != null && mounted) {
@@ -177,7 +256,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: const Column(
                     children: [
                       Text('Shift Siang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('10:00 - 18:00', style: const TextStyle(fontSize: 12)),
+                      Text('10:00 - 18:00', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    selectedShift = 'full_time';
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Column(
+                    children: [
+                      Text('Full Time', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('07:00 - 16:00', style: TextStyle(fontSize: 12)),
                     ],
                   ),
                 ),
@@ -191,9 +290,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (selectedShift != null) {
       await shiftService.selectShift(userId, selectedShift!);
       if (mounted) {
+        final shiftLabel = selectedShift == 'morning' ? 'Pagi' : selectedShift == 'afternoon' ? 'Siang' : 'Full Time';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shift ${selectedShift == 'morning' ? 'Pagi' : 'Siang'} dipilih!'),
+            content: Text('Shift $shiftLabel dipilih!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -272,9 +372,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
+    if (!_isLocationServiceEnabled) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Mohon aktifkan lokasi (GPS) terlebih dahulu.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        _showEnableLocationDialog();
+      }
+      return;
+    }
+
     // Check if user is driver (driver can check in from anywhere)
     final role = authService.profile?['role'] ?? '';
-    final isDriver = role == 'driver';
+    final isDriver = role == 'driver_bebas';
     final isJuruParkir = role == 'juru_parkir';
 
     // For Juru Parkir, check if shift has been selected for today
@@ -288,6 +402,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // User didn't select shift, cancel check-in
           setState(() => _isProcessing = false);
           return;
+        }
+        // Update shift badge display
+        final newShift = await ShiftScheduleService().getTodayShift(user.id);
+        if (mounted) {
+          setState(() {
+            _todayShift = newShift ?? '';
+          });
         }
       }
     }
@@ -314,6 +435,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 final now = DateTime.now();
 final currentCoords = locationService.currentLocation?.coords;
 
+// Reject invalid coordinates (0,0) — GPS not available
+if (currentCoords != null && currentCoords.latitude == 0 && currentCoords.longitude == 0) {
+  if (mounted) {
+    setState(() => _isProcessing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Lokasi tidak valid (0,0). Mohon aktifkan GPS dan coba lagi.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  return;
+}
+
 try {
   if (_todayAttendance != null) {
     // CHECK-OUT
@@ -327,7 +462,7 @@ try {
         );
       } else {
         final result = await supabase.from('attendance').update({
-          'check_out_time': now.toIso8601String(),
+          'check_out_time': now.toUtc().toIso8601String(),
           'check_out_latitude': currentCoords?.latitude,
           'check_out_longitude': currentCoords?.longitude,
         }).eq('id', _todayAttendance!['id']).select('status').maybeSingle();
@@ -348,38 +483,64 @@ try {
       }
     }
   } else {
-    // CHECK-IN
-    String? officeId;
-    if (syncService.isOnline) {
-      final officeData = await supabase.from('offices').select('id').limit(1).maybeSingle();
-      officeId = officeData?['id'];
-    }
+     // CHECK-IN
+     // --- Select work status ---
+     String? workStatus = await _showWorkStatusSelectionDialog();
+     if (!mounted) {
+       setState(() => _isProcessing = false);
+       return;
+     }
+     // If user canceled dialog, treat as null (will be saved as empty)
+     
+     // --- Selfie capture ---
+     String? photoUrl;
+     String? localPhotoPath;
+     if (mounted) {
+       final selfieResult = await showDialog<SelfieResult>(
+         context: context,
+         barrierDismissible: false,
+         builder: (_) => const SelfieCameraOverlay(),
+       );
+       photoUrl = selfieResult?.photoUrl;
+       localPhotoPath = selfieResult?.localFilePath;
+     }
 
-    if (syncService.isOnline) {
-      final result = await supabase.from('attendance').insert({
-        'user_id': user.id,
-        'check_in_time': now.toIso8601String(),
-        'check_in_latitude': currentCoords?.latitude,
-        'check_in_longitude': currentCoords?.longitude,
-        'is_mocked': locationService.isMocked,
-        'distance_from_office': locationService.currentDistance,
-        'office_id': officeId,
-      }).select('status').maybeSingle();
+     String? officeId;
+     if (syncService.isOnline) {
+       final officeData = await supabase.from('offices').select('id').limit(1).maybeSingle();
+       officeId = officeData?['id'];
+     }
 
-      if (result != null && mounted) {
-        await _showCheckInResultDialog(result['status']);
-      }
-      NotificationService().showCheckInSuccess();
-    } else {
-      await syncService.saveAttendanceOffline(
-        userId: user.id,
-        checkInTime: now,
-        checkInLatitude: currentCoords?.latitude ?? 0,
-        checkInLongitude: currentCoords?.longitude ?? 0,
-        checkInDistance: locationService.currentDistance,
-        isMocked: locationService.isMocked,
-      );
-    }
+      if (syncService.isOnline) {
+        final result = await supabase.from('attendance').insert({
+          'user_id': user.id,
+          'check_in_time': now.toUtc().toIso8601String(),
+          'check_in_latitude': currentCoords?.latitude,
+          'check_in_longitude': currentCoords?.longitude,
+          'is_mocked': locationService.isMocked,
+          'distance_from_office': locationService.currentDistance,
+          'office_id': officeId,
+          if (photoUrl != null) 'photo_url': photoUrl,
+          'work_status': workStatus ?? 'WFO',
+        }).select('status').maybeSingle();
+
+       if (result != null && mounted) {
+         await _showCheckInResultDialog(result['status']);
+       }
+       NotificationService().showCheckInSuccess();
+     } else {
+       await syncService.saveAttendanceOffline(
+         userId: user.id,
+         checkInTime: now,
+         checkInLatitude: currentCoords?.latitude ?? 0,
+         checkInLongitude: currentCoords?.longitude ?? 0,
+         checkInDistance: locationService.currentDistance,
+         isMocked: locationService.isMocked,
+         photoUrl: photoUrl,
+         localPhotoPath: localPhotoPath,
+          workStatus: workStatus ?? 'WFO',
+       );
+     }
   }
 
   await _fetchTodayAttendance();
@@ -409,10 +570,11 @@ try {
     // Determine late threshold based on shift type
     String lateThresholdMsg;
     if (userShift == 'afternoon') {
-      lateThresholdMsg = '11:00 WIB (Shift Siang)';
+      lateThresholdMsg = '10:03 WIB (Shift Siang)';
+    } else if (userShift == 'morning') {
+      lateThresholdMsg = '06:03 WIB (Shift Pagi)';
     } else {
-      // Default to morning shift or unspecified
-      lateThresholdMsg = '07:00 WIB (Shift Pagi)';
+      lateThresholdMsg = '07:03 WIB (Full Time)';
     }
 
     switch (status) {
@@ -555,6 +717,127 @@ try {
     );
   }
 
+  /// Show dialog to select work status before check-in
+  Future<String?> _showWorkStatusSelectionDialog() async {
+    String? selectedStatus;
+    String? customStatus;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Pilih Status Kerja'),
+          content: StatefulBuilder(
+            builder: (context, setState2) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<String>(
+                  title: const Text('WFH (Work From Home)'),
+                  value: 'WFH',
+                  groupValue: selectedStatus,
+                  onChanged: (value) => setState(() => selectedStatus = value),
+                ),
+                RadioListTile<String>(
+                  title: const Text('WFO (Work From Office)'),
+                  value: 'WFO',
+                  groupValue: selectedStatus,
+                  onChanged: (value) => setState(() => selectedStatus = value),
+                ),
+                RadioListTile<String>(
+                  title: const Text('DINAS (Dinas/Travel)'),
+                  value: 'DINAS',
+                  groupValue: selectedStatus,
+                  onChanged: (value) => setState(() => selectedStatus = value),
+                ),
+                RadioListTile<String>(
+                  title: const Text('Lainnya'),
+                  value: 'LAINNYA',
+                  groupValue: selectedStatus,
+                  onChanged: (value) => {
+                    setState(() => selectedStatus = value),
+                    // clear custom when switching away? we keep
+                  },
+                ),
+                if (selectedStatus == 'LAINNYA')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Masukkan status kustom',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) => customStatus = value.trim(),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                // Determine final status
+                String? finalStatus;
+                if (selectedStatus == 'LAINNYA') {
+                  finalStatus = customStatus?.isNotEmpty == true ? customStatus : null;
+                } else {
+                  finalStatus = selectedStatus;
+                }
+                Navigator.of(context).pop(finalStatus);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  DateTime _nowWIB() => DateTime.now().toUtc().add(const Duration(hours: 7));
+
+  Widget _buildDigitalClock() {
+    return StreamBuilder(
+      stream: Stream.periodic(const Duration(seconds: 1)),
+      builder: (context, snapshot) {
+        final now = _nowWIB();
+        final timeStr =
+            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+        final days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        final dayName = days[now.weekday - 1];
+        final months = [
+          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ];
+        final dateStr = '$dayName, ${now.day} ${months[now.month - 1]} ${now.year}';
+        return Column(
+          children: [
+            Text(
+              timeStr,
+              style: const TextStyle(
+                fontSize: 42,
+                fontWeight: FontWeight.w300,
+                color: Color(0xFF005494),
+                letterSpacing: 2,
+              ),
+            ),
+            Text(
+              dateStr,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -562,10 +845,10 @@ try {
     final syncService = Provider.of<SyncService>(context);
 
     final role = authService.profile?['role'] ?? '';
-    final isDriver = role == 'driver';
+    final isDriver = role == 'driver_bebas';
     final hasLocation = locationService.currentLocation != null || isDriver;
     // Drivers can attend from anywhere (no radius check needed)
-    final canAttend = hasLocation && (locationService.isInRadius || isDriver) && !locationService.isMocked;
+    final canAttend = _isLocationServiceEnabled && hasLocation && (locationService.isInRadius || isDriver) && !locationService.isMocked;
 
     return Scaffold(
       appBar: AppBar(
@@ -611,6 +894,34 @@ try {
       ),
       body: Column(
         children: [
+          if (!_isLocationServiceEnabled)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: Colors.red.shade700,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.location_off, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Lokasi (GPS) Tidak Aktif',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await Geolocator.openLocationSettings();
+                    },
+                    child: const Text(
+                      'AKTIFKAN',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (locationService.permissionDenied)
             Container(
               width: double.infinity,
@@ -743,9 +1054,9 @@ try {
           ),
 
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.only(
@@ -755,8 +1066,9 @@ try {
                 boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
               ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
+                  _buildDigitalClock(),
+                  const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -821,12 +1133,12 @@ try {
                   // Show shift info for Juru Parkir
                   if (role == 'juru_parkir')
                     Container(
-                      margin: const EdgeInsets.only(top: 8),
+                      margin: const EdgeInsets.only(top: 6),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _todayShift.isEmpty
                             ? Colors.yellow[100]
-                            : (_todayShift == 'morning' ? Colors.blue[100] : Colors.orange[100]),
+                            : (_todayShift == 'morning' ? Colors.blue[100] : _todayShift == 'afternoon' ? Colors.orange[100] : Colors.grey[200]),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -837,26 +1149,26 @@ try {
                             size: 16,
                             color: _todayShift.isEmpty
                                 ? Colors.orange
-                                : (_todayShift == 'morning' ? Colors.blue[800] : Colors.orange[800]),
+                                : (_todayShift == 'morning' ? Colors.blue[800] : _todayShift == 'afternoon' ? Colors.orange[800] : Colors.grey[800]),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             _todayShift.isEmpty
                                 ? 'Shift: Belum Pilih'
-                                : 'Shift ${_todayShift == 'morning' ? 'Pagi' : 'Siang'}',
+                                : 'Shift ${_todayShift == 'morning' ? 'Pagi' : _todayShift == 'afternoon' ? 'Siang' : 'Full Time'}',
                             style: TextStyle(
                               color: _todayShift.isEmpty
                                   ? Colors.orange
-                                  : (_todayShift == 'morning' ? Colors.blue[800] : Colors.orange[800]),
+                                  : (_todayShift == 'morning' ? Colors.blue[800] : _todayShift == 'afternoon' ? Colors.orange[800] : Colors.grey[800]),
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                             ),
                           ),
                           if (_todayShift.isNotEmpty) ...[
                             Text(
-                              ' • Batas ${_todayShift == 'morning' ? '07:00' : '11:00'}',
+                              ' • Batas ${_todayShift == 'morning' ? '06:03' : _todayShift == 'afternoon' ? '10:03' : '07:03'}',
                               style: TextStyle(
-                                color: _todayShift == 'morning' ? Colors.blue[600] : Colors.orange[600],
+                                color: _todayShift == 'morning' ? Colors.blue[600] : _todayShift == 'afternoon' ? Colors.orange[600] : Colors.grey[600],
                                 fontSize: 11,
                               ),
                             ),
@@ -865,10 +1177,14 @@ try {
                       ),
                     ),
                   if (locationService.isMocked)
-                    const Text(
-                      '⚠️ Fake GPS Terdeteksi! Absensi Dinonaktifkan.',
-                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        '⚠️ Fake GPS Terdeteksi! Absensi Dinonaktifkan.',
+                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                      ),
                     ),
+                  const Spacer(),
                   SizedBox(
                     width: double.infinity,
                     height: 55,

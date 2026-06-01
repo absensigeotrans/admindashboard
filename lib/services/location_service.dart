@@ -161,6 +161,19 @@ class LocationService extends ChangeNotifier {
     return false;
   }
 
+  Future<bool> isServiceEnabled() async {
+    return await Geolocator.isLocationServiceEnabled();
+  }
+
+  Future<bool> isLocationReady() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return false;
+
+    if (_permissionDenied) return false;
+
+    return _currentLocation != null;
+  }
+
   Future<void> startTracking() async {
     await bg.BackgroundGeolocation.start();
     _isTracking = true;

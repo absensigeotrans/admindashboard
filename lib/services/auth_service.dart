@@ -53,7 +53,7 @@ class AuthService extends ChangeNotifier {
     required String fullName,
     required String employeeId,
     required String role,
-    String shiftType = '',
+    String shiftType = 'non_shifting',
   }) async {
     _isLoading = true;
     notifyListeners();

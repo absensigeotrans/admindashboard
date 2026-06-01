@@ -1,19 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAdminSettings } from '@/hooks/useAdminSettings';
+import { useAdminSettings, type ShiftConfig } from '@/hooks/useAdminSettings';
 import { Button } from '@/components/ui/Button';
 import { FormInput } from '@/components/ui/FormInput';
 import { toast } from '@/components/ui/Toast';
-import { Settings, Clock, MapPin, Database, CheckCircle, AlertCircle } from 'lucide-react';
+import { Settings, Clock, MapPin, Database, CheckCircle, AlertCircle, ArrowsUpFromLine, Sun, Moon, SunDim, Building2, Pencil, Check, X } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { settings, loading, synced, syncFromDB, updateSettings, resetSettings } = useAdminSettings();
+  const { settings, loading, synced, syncFromDB, updateSettings, resetSettings, shifts, shiftsLoading, fetchShifts, updateShift } = useAdminSettings();
 
   const [hour, setHour] = useState(settings.late_threshold_hour.toString());
   const [minute, setMinute] = useState(settings.late_threshold_minute.toString());
   const [radius, setRadius] = useState(settings.default_geofence_radius.toString());
   const [saving, setSaving] = useState(false);
+  const [editingShift, setEditingShift] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{ start_time: string; end_time: string; grace_minutes: string }>({ start_time: '', end_time: '', grace_minutes: '' });
 
   useEffect(() => {
     setHour(settings.late_threshold_hour.toString());
@@ -23,7 +25,27 @@ export default function SettingsPage() {
 
   useEffect(() => {
     syncFromDB();
-  }, [syncFromDB]);
+    fetchShifts();
+  }, [syncFromDB, fetchShifts]);
+
+  const startEdit = (s: ShiftConfig) => {
+    setEditingShift(s.shift_type);
+    setEditValues({ start_time: s.start_time.slice(0, 5), end_time: s.end_time.slice(0, 5), grace_minutes: String(s.grace_minutes) });
+  };
+
+  const cancelEdit = () => {
+    setEditingShift(null);
+  };
+
+  const saveEdit = async (shift_type: string) => {
+    await updateShift(shift_type, {
+      start_time: editValues.start_time + ':00',
+      end_time: editValues.end_time + ':00',
+      grace_minutes: parseInt(editValues.grace_minutes) || 3,
+    });
+    setEditingShift(null);
+    toast.success('Shift updated');
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -58,7 +80,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Late Threshold</h3>
-            <p className="text-sm text-gray-500">Employees checking in after this time are marked as "late"</p>
+            <p className="text-sm text-gray-500">Batas terlambat untuk karyawan Non-Shifting (Full Time). Shift Pagi & Siang punya batas sendiri.</p>
           </div>
         </div>
 
@@ -87,9 +109,70 @@ export default function SettingsPage() {
             </select>
           </div>
           <span className="text-gray-500 text-sm">
-            ({parseInt(hour).toString().padStart(2, '0')}:{parseInt(minute).toString().padStart(2, '0')} = late)
+            ({parseInt(hour).toString().padStart(2, '0')}:{parseInt(minute).toString().padStart(2, '0')} = late untuk Non-Shifting)
           </span>
         </div>
+      </div>
+
+      {/* Shift Config */}
+      <div className="bg-white rounded-xl shadow-sm border p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-amber-100 rounded-lg">
+            <Sun className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Konfigurasi Shift</h3>
+            <p className="text-sm text-gray-500">Jam kerja per shift. Digunakan untuk kalkulasi lembur otomatis.</p>
+          </div>
+        </div>
+
+        {shiftsLoading ? (
+          <div className="pl-12 text-sm text-gray-400">Loading...</div>
+        ) : (
+          <div className="pl-12 space-y-3">
+            {shifts.map(s => (
+              <div key={s.shift_type} className="border rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{s.name}</span>
+                    <span className="text-xs text-gray-400 font-mono">{s.shift_type}</span>
+                  </div>
+                  {editingShift === s.shift_type ? (
+                    <div className="flex gap-1">
+                      <button onClick={() => saveEdit(s.shift_type)} className="p-1 text-green-600 hover:bg-green-50 rounded">
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button onClick={cancelEdit} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => startEdit(s)} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {editingShift === s.shift_type ? (
+                  <div className="flex items-center gap-3 text-sm">
+                    <label className="text-gray-500">Start:</label>
+                    <input type="time" value={editValues.start_time} onChange={e => setEditValues(p => ({ ...p, start_time: e.target.value }))} className="px-2 py-1 border rounded text-sm" />
+                    <label className="text-gray-500">End:</label>
+                    <input type="time" value={editValues.end_time} onChange={e => setEditValues(p => ({ ...p, end_time: e.target.value }))} className="px-2 py-1 border rounded text-sm" />
+                    <label className="text-gray-500">Grace:</label>
+                    <input type="number" min="0" max="60" value={editValues.grace_minutes} onChange={e => setEditValues(p => ({ ...p, grace_minutes: e.target.value }))} className="px-2 py-1 border rounded text-sm w-16" />
+                    <span className="text-xs text-gray-400">menit</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <span><span className="text-gray-400">Start:</span> {s.start_time.slice(0, 5)} WIB</span>
+                    <span><span className="text-gray-400">End:</span> {s.end_time.slice(0, 5)} WIB</span>
+                    <span><span className="text-gray-400">Grace:</span> {s.grace_minutes} menit</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Default Geofence Radius */}

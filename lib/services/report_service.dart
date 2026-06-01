@@ -64,36 +64,55 @@ class ReportService {
             ),
             pw.SizedBox(height: 20),
 
-            // Attendance Table
-            pw.TableHelper.fromTextArray(
-              headers: ['Tanggal', 'Check-In', 'Check-Out', 'Jarak (m)', 'Status'],
-              data: attendanceData.map((item) {
-                final checkIn = DateTime.parse(item['check_in_time']);
-                final checkOut = item['check_out_time'] != null 
-                    ? DateTime.parse(item['check_out_time']) 
-                    : null;
-                
-                return [
-                  DateFormat('dd MMM yyyy').format(checkIn),
-                  DateFormat('HH:mm').format(checkIn),
-                  checkOut != null ? DateFormat('HH:mm').format(checkOut) : '-',
-                  (item['distance_from_office'] as num?)?.toStringAsFixed(1) ?? '0',
-                  item['is_mocked'] == true ? 'Fake GPS' : 'Valid',
-                ];
-              }).toList(),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-              cellAlignment: pw.Alignment.centerLeft,
-              columnWidths: {
-                0: const pw.FlexColumnWidth(2),
-                1: const pw.FlexColumnWidth(1.5),
-                2: const pw.FlexColumnWidth(1.5),
-                3: const pw.FlexColumnWidth(1.5),
-                4: const pw.FlexColumnWidth(1.5),
-              },
+             // Attendance Table
+              pw.TableHelper.fromTextArray(
+                headers: ['Tanggal', 'Check-In', 'Check-Out', 'Status Kerja', 'Lembur', 'Validitas'],
+                 data: attendanceData.map((item) {
+                   // Parse as UTC time (as stored in database) and convert to WIB (UTC+7)
+                   final checkInUtc = DateTime.parse(item['check_in_time']).toUtc();
+                   final checkInWib = checkInUtc.add(const Duration(hours: 7));
+                   final checkOutWib = item['check_out_time'] != null 
+                       ? DateTime.parse(item['check_out_time']).toUtc().add(const Duration(hours: 7)) 
+                       : null;
+                   final overtime = (item['overtime_minutes'] as num?)?.toInt() ?? 0;
+                  
+                   return [
+                     DateFormat('dd MMM yyyy').format(checkInWib),
+                     DateFormat('HH:mm').format(checkInWib),
+                     checkOutWib != null ? DateFormat('HH:mm').format(checkOutWib) : '-',
+                     item['work_status'] ?? '-',
+                     overtime > 0 ? '$overtime menit' : '-',
+                     item['is_mocked'] == true ? 'Fake GPS' : 'Valid',
+                   ];
+                 }).toList(),
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                cellAlignment: pw.Alignment.centerLeft,
+                columnWidths: {
+                  0: const pw.FlexColumnWidth(2),
+                  1: const pw.FlexColumnWidth(1.5),
+                  2: const pw.FlexColumnWidth(1.5),
+                  3: const pw.FlexColumnWidth(1.5),
+                  4: const pw.FlexColumnWidth(1.5),
+                  5: const pw.FlexColumnWidth(1.5),
+                },
+              ),
+
+            // Overtime Summary
+            pw.SizedBox(height: 12),
+            pw.Row(
+              children: [
+                pw.Text(
+                  'Total Lembur: ${attendanceData.fold<int>(0, (sum, item) {
+                    final ot = (item['overtime_minutes'] as num?)?.toInt() ?? 0;
+                    return sum + ot;
+                  })} menit',
+                  style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.orange700),
+                ),
+              ],
             ),
 
-            pw.SizedBox(height: 40),
+            pw.SizedBox(height: 28),
 
             // Footer / Signature Placeholder
             pw.Row(

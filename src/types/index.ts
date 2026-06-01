@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'viewer' | 'driver' | 'juru_parkir' | 'ob' | 'inactive';
+export type UserRole = 'admin' | 'viewer' | 'driver_bebas' | 'driver_kantor' | 'juru_parkir' | 'ob' | 'inactive';
 
 export type ShiftType = 'morning' | 'afternoon';
 
@@ -49,10 +49,11 @@ export interface Attendance {
   updated_at: string;
   // Relations (from Supabase join)
   profiles?: Profile;
-  shifts?: { name: string; code: string };
   offices?: Office;
   // Computed fields
   shift_type?: ShiftType | null;
+  overtime_minutes?: number | null;
+  work_duration_minutes?: number | null;
 }
 
 export interface AttendanceLog {

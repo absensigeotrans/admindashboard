@@ -53,6 +53,7 @@ Modern aplikasi absensi menggunakan teknologi GPS geofencing. Karyawan hanya bis
 - **Toast Notifications** - User feedback untuk semua actions
 - **Offline Support** - SQLite local cache untuk mobile
 - **Biometric Auth** - Fingerprint/Face ID support
+- **One-Tap Selfie Attendance** - Auto-capture kamera depan saat check-in, kompresi <50KB, upload ke Supabase Storage
 
 ---
 
@@ -76,6 +77,7 @@ Modern aplikasi absensi menggunakan teknologi GPS geofencing. Karyawan hanya bis
 | GPS | geolocator + flutter_background_geolocation |
 | Local DB | SQLite (offline cache) |
 | Biometric | local_auth |
+| Camera | camera + flutter_image_compress |
 | Notifications | flutter_local_notifications |
 
 ### Shared Backend
@@ -183,17 +185,20 @@ geoattend-pro/                              # Root repository
 │   │   │       ├── admin_employees_screen.dart
 │   │   │       ├── admin_offices_screen.dart
 │   │   │       └── admin_reports_screen.dart
-│   │   └── services/
-│   │       ├── auth_service.dart
-│   │       ├── attendance_service.dart
-│   │       ├── office_service.dart
-│   │       ├── shift_service.dart
-│   │       ├── leave_service.dart
-│   │       ├── location_service.dart
-│   │       ├── sync_service.dart
-│   │       ├── notification_service.dart
-│   │       ├── report_service.dart
-│   │       └── biometric_service.dart
+│   │   ├── services/
+│   │   │   ├── auth_service.dart
+│   │   │   ├── attendance_service.dart
+│   │   │   ├── office_service.dart
+│   │   │   ├── shift_service.dart
+│   │   │   ├── leave_service.dart
+│   │   │   ├── location_service.dart
+│   │   │   ├── sync_service.dart
+│   │   │   ├── notification_service.dart
+│   │   │   ├── report_service.dart
+│   │   │   ├── biometric_service.dart
+│   │   │   └── selfie_service.dart
+│   │   └── widgets/
+│   │       └── selfie_camera_overlay.dart
 │   ├── android/
 │   ├── ios/
 │   ├── pubspec.yaml
@@ -363,6 +368,7 @@ geoattend-pro/                              # Root repository
 | `is_valid` | BOOLEAN | Apakah absensi valid |
 | `distance_from_office` | DOUBLE PRECISION | Jarak dari kantor |
 | `is_mocked` | BOOLEAN | Apakah lokasi dimanipulasi |
+| `photo_url` | TEXT | URL foto selfie saat check-in |
 | `created_at` | TIMESTAMPTZ | Timestamp dibuat |
 
 **Attendance Status:**
@@ -512,6 +518,7 @@ flutter run
 | `100_initial_schema.sql` | Initial schema (legacy) | - |
 | `101_create_offices.sql` | Create offices table | - |
 | `102_leave_requests.sql` | Leave requests alt version | - |
+| `1005_add_selfie_attendance.sql` | Add photo_url to attendance + storage bucket selfie_absensi + RLS | 005 |
 | `999_test_connection.sql` | Test connection | - |
 
 ### Key Fixes Applied

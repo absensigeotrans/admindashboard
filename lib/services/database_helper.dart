@@ -19,30 +19,50 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
 
+   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+     if (oldVersion < 2) {
+       await db.execute(
+         'ALTER TABLE pending_attendance ADD COLUMN photo_url TEXT',
+       );
+       await db.execute(
+         'ALTER TABLE pending_attendance ADD COLUMN local_photo_path TEXT',
+       );
+     }
+     if (oldVersion < 3) {
+       await db.execute(
+         'ALTER TABLE pending_attendance ADD COLUMN work_status TEXT',
+       );
+     }
+   }
+
   Future<void> _createDB(Database db, int version) async {
-    // Tabel absensi offline
-    await db.execute('''
-      CREATE TABLE pending_attendance (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        check_in_time TEXT,
-        check_in_latitude REAL,
-        check_in_longitude REAL,
-        check_out_time TEXT,
-        check_out_latitude REAL,
-        check_out_longitude REAL,
-        is_mocked INTEGER DEFAULT 0,
-        distance_from_office REAL,
-        sync_status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        unique_check_in TEXT
-      )
-    ''');
+     // Tabel absensi offline
+     await db.execute('''
+       CREATE TABLE pending_attendance (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         user_id TEXT NOT NULL,
+         check_in_time TEXT,
+         check_in_latitude REAL,
+         check_in_longitude REAL,
+         check_out_time TEXT,
+         check_out_latitude REAL,
+         check_out_longitude REAL,
+         is_mocked INTEGER DEFAULT 0,
+         distance_from_office REAL,
+         photo_url TEXT,
+         local_photo_path TEXT,
+         sync_status TEXT DEFAULT 'pending',
+         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+         unique_check_in TEXT,
+         work_status TEXT
+       )
+     ''');
 
     // Tabel sinkronisasi absensi
     await db.execute('''

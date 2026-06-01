@@ -10,7 +10,8 @@ import { supabase } from '@/lib/supabase';
 import { StatsCard } from '@/components/ui/StatsCard';
 import { ChartCard } from '@/components/admin/ChartCard';
 import { formatDistance } from '@/lib/utils';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks } from 'date-fns';
+import { getWIBDate, getWIBDateObj, formatWIBDate, formatWIBTime, formatWIBDateHeader, formatWIBMonth, formatWIBChartTick, formatWIBChartLabel } from '@/lib/timezone';
 import {
   CheckCircle, Clock, XCircle, Users, Building2, MapPin,
   TrendingUp, Calendar, ArrowUpRight, AlertTriangle,
@@ -28,11 +29,6 @@ import type { PieLabelRenderProps } from 'recharts';
 
 interface WeeklyStats {
   totalClockIns: number;
-  avgCheckIn: string;
-  avgDistance: number;
-  lateRate: string;
-  avgCheckOut: string;
-  avgWorkingHours: string;
 }
 
 interface PeriodComparison {
@@ -67,7 +63,7 @@ export default function AdminDashboard() {
   const { fetchEmployees } = useEmployees();
   const { fetchDashboardData, getEmployeeSummary } = useReports();
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats>({
-    totalClockIns: 0, avgCheckIn: '--:--', avgDistance: 0, lateRate: '0%', avgCheckOut: '--:--', avgWorkingHours: '--:--',
+    totalClockIns: 0,
   });
   const [monthlyStats, setMonthlyStats] = useState({ present: 0, late: 0, outside: 0, suspicious: 0 });
   const [weeklySuspicious, setWeeklySuspicious] = useState(0);
@@ -106,15 +102,15 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (history.length === 0) return;
 
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = getWIBDate();
+    const nowWIB = getWIBDateObj();
 
     // Today's records
-    const todayRecords = history.filter((h) => h.check_in_time.startsWith(today));
+    const todayRecords = history.filter((h) => formatWIBDate(h.check_in_time) === today);
 
     // Week boundaries
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    const weekStart = startOfWeek(nowWIB, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(nowWIB, { weekStartsOn: 1 });
     const weekRecords = history.filter((h) => {
       const d = new Date(h.check_in_time);
       return d >= weekStart && d <= weekEnd;
@@ -129,59 +125,15 @@ export default function AdminDashboard() {
     });
 
     // Monthly stats
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
+    const monthStart = startOfMonth(nowWIB);
+    const monthEnd = endOfMonth(nowWIB);
     const monthRecords = history.filter((h) => {
       const d = new Date(h.check_in_time);
       return d >= monthStart && d <= monthEnd;
     });
 
-    // Calculate weekly stats
-    const avgDistance = weekRecords.length > 0
-      ? weekRecords.reduce((s, r) => s + (r.distance_from_office || 0), 0) / weekRecords.length
-      : 0;
-
-    const avgHour = weekRecords.length > 0
-      ? weekRecords.reduce((s, r) => {
-          const d = new Date(r.check_in_time);
-          return s + d.getHours() + d.getMinutes() / 60;
-        }, 0) / weekRecords.length
-      : 9;
-
-    const lateCount = weekRecords.filter((r) => r.status === 'late').length;
-    const lateRate = weekRecords.length > 0
-      ? Math.round((lateCount / weekRecords.length) * 100)
-      : 0;
-
-    // Working hours calculation
-    const recordsWithCheckout = weekRecords.filter((r) => r.check_out_time);
-    let avgCheckOut = '--:--';
-    let avgWorkingHours = '--:--';
-
-    if (recordsWithCheckout.length > 0) {
-      const avgCheckOutHour = recordsWithCheckout.reduce((s, r) => {
-        const d = new Date(r.check_out_time!);
-        return s + d.getHours() + d.getMinutes() / 60;
-      }, 0) / recordsWithCheckout.length;
-
-      avgCheckOut = `${Math.floor(avgCheckOutHour).toString().padStart(2, '0')}:${Math.round((avgCheckOutHour % 1) * 60).toString().padStart(2, '0')}`;
-
-      const totalWorkingMinutes = recordsWithCheckout.reduce((s, r) => {
-        const checkIn = new Date(r.check_in_time);
-        const checkOut = new Date(r.check_out_time!);
-        return s + (checkOut.getTime() - checkIn.getTime()) / 60000;
-      }, 0) / recordsWithCheckout.length;
-
-      avgWorkingHours = `${Math.floor(totalWorkingMinutes / 60)}h ${Math.round(totalWorkingMinutes % 60)}m`;
-    }
-
     setWeeklyStats({
       totalClockIns: weekRecords.length,
-      avgCheckIn: `${Math.floor(avgHour).toString().padStart(2, '0')}:${Math.round((avgHour % 1) * 60).toString().padStart(2, '0')}`,
-      avgDistance,
-      lateRate: `${lateRate}%`,
-      avgCheckOut,
-      avgWorkingHours,
     });
 
     // Monthly breakdown
@@ -216,7 +168,7 @@ export default function AdminDashboard() {
           user_id: r.user_id,
           employee_id: (r as any).profiles?.employee_id,
           check_in_time: r.check_in_time,
-          check_out_time: r.check_out_time,
+          check_out_time: r.check_out_time ?? undefined,
           status: r.status,
           distance: formatDistance(r.distance_from_office),
           is_mocked: r.is_mocked || false,
@@ -273,13 +225,15 @@ export default function AdminDashboard() {
   const [employeeCount, setEmployeeCount] = useState(0);
   useEffect(() => {
     supabase.from('profiles').select('id', { count: 'exact', head: true })
+      .not('role', 'eq', 'inactive')
+      .not('role', 'eq', 'admin')
       .then(({ count }) => setEmployeeCount(count || 0));
   }, []);
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayPresent = history.filter((h) => h.check_in_time.startsWith(today) && h.status === 'present').length;
-  const todayLate = history.filter((h) => h.check_in_time.startsWith(today) && h.status === 'late').length;
-  const todayOutside = history.filter((h) => h.check_in_time.startsWith(today) && h.status === 'outside_radius').length;
+  const today = getWIBDate();
+  const todayPresent = history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'present').length;
+  const todayLate = history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'late').length;
+  const todayOutside = history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'outside_radius').length;
 
   const analytics = useDashboardAnalytics();
 
@@ -351,7 +305,7 @@ export default function AdminDashboard() {
           <div className="pl-4">
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              {format(new Date(), 'EEEE, dd MMMM yyyy')}
+              {formatWIBDateHeader()}
             </p>
           </div>
         </div>
@@ -389,31 +343,13 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* This Week Stats + Working Hours */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* This Week Stats */}
+      <div className="grid grid-cols-2 gap-4">
         <StatsCard
           icon={<TrendingUp className="w-6 h-6" />}
           value={weeklyStats.totalClockIns}
           label="Clock-ins This Week"
           color="blue"
-        />
-        <StatsCard
-          icon={<Clock className="w-6 h-6" />}
-          value={weeklyStats.avgCheckIn}
-          label="Avg Check-in"
-          color="purple"
-        />
-        <StatsCard
-          icon={<LogOut className="w-6 h-6" />}
-          value={weeklyStats.avgCheckOut}
-          label="Avg Check-out"
-          color="purple"
-        />
-        <StatsCard
-          icon={<MapPin className="w-6 h-6" />}
-          value={formatDistance(weeklyStats.avgDistance)}
-          label="Avg Distance"
-          color="yellow"
         />
         <StatsCard
           icon={<AlertTriangle className="w-6 h-6" />}
@@ -457,7 +393,7 @@ export default function AdminDashboard() {
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-red-blue opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-blue-600" />
-            This Month ({format(new Date(), 'MMMM yyyy')})
+            This Month ({formatWIBMonth()})
           </h3>
           <div className="grid grid-cols-4 gap-3 text-center">
             <div className="bg-green-50 rounded-lg p-3">
@@ -609,12 +545,12 @@ export default function AdminDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis
                     dataKey="date"
-                    tickFormatter={(d) => format(new Date(String(d)), 'dd MMM')}
+                    tickFormatter={(d) => formatWIBChartTick(d)}
                     tick={{ fontSize: 11 }}
                   />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
-                    labelFormatter={(d) => format(new Date(String(d)), 'dd MMM yyyy')}
+                    labelFormatter={(d) => formatWIBChartLabel(d)}
                   />
                   <Legend />
                   <Bar dataKey="present" name="Present" stackId="a" fill="#22c55e" />
@@ -643,12 +579,12 @@ export default function AdminDashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(d) => format(new Date(String(d)), 'dd MMM')}
+                  tickFormatter={(d) => formatWIBChartTick(d)}
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip
-                  labelFormatter={(d) => format(new Date(String(d)), 'dd MMM yyyy')}
+                  labelFormatter={(d) => formatWIBChartLabel(d)}
                 />
                 <Legend />
                 <Line
@@ -659,17 +595,6 @@ export default function AdminDashboard() {
                   strokeWidth={2}
                   dot={{ fill: '#eab308', r: 3 }}
                 />
-                {analytics.data.lateTrend.some((d) => d.avgLateMinutes > 0) && (
-                  <Line
-                    type="monotone"
-                    dataKey="avgLateMinutes"
-                    name="Avg Late (min)"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    dot={{ fill: '#f97316', r: 3 }}
-                    strokeDasharray="5 5"
-                  />
-                )}
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -729,12 +654,12 @@ export default function AdminDashboard() {
                     <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {format(new Date(record.check_in_time), 'HH:mm')}
+                        {formatWIBTime(record.check_in_time)}
                       </span>
                       {record.check_out_time && (
                         <span className="flex items-center gap-1">
                           <LogOut className="w-3 h-3" />
-                          {format(new Date(record.check_out_time), 'HH:mm')}
+                          {formatWIBTime(record.check_out_time)}
                         </span>
                       )}
                       <span className="flex items-center gap-1">

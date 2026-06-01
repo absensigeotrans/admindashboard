@@ -38,6 +38,8 @@
 		<string>fetch</string>
 		<string>processing</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Aplikasi ini memerlukan akses kamera untuk mengambil foto selfie saat absensi.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

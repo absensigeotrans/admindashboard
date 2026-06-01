@@ -13,13 +13,14 @@ import { Badge } from '@/components/ui/Badge';
 import { FormInput, FormSelect } from '@/components/ui/FormInput';
 import { toast } from '@/components/ui/Toast';
 import { Profile, UserRole, ShiftType } from '@/types';
+import { getWIBDate, formatWIBDateDisplay } from '@/lib/timezone';
 import { Users, Building2, UserCog, Download, Clock, UserPlus } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
 export default function EmployeesPage() {
   const {
-    employees, loading, fetchEmployees, updateEmployee,
+    employees, setEmployees, loading, fetchEmployees, updateEmployee,
     toggleRole, deactivateEmployee, activateEmployee, createEmployee,
   } = useEmployees();
   const { offices } = useOffices();
@@ -51,7 +52,6 @@ export default function EmployeesPage() {
   const [addFullName, setAddFullName] = useState('');
   const [addEmail, setAddEmail] = useState('');
   const [addPassword, setAddPassword] = useState('');
-  const [addNIK, setAddNIK] = useState('');
   const [addEmployeeId, setAddEmployeeId] = useState('');
   const [addRole, setAddRole] = useState<UserRole>('viewer');
   const [addShift, setAddShift] = useState<ShiftType | ''>('');
@@ -84,20 +84,36 @@ export default function EmployeesPage() {
 
   const handleSaveEdit = async () => {
     if (!editEmployee) return;
-    setSaving(true);
+
+    // Optimistic update - langsung update UI tanpa loading
+    const previousEmployees = [...employees];
+    const updatedEmployee = {
+      ...editEmployee,
+      full_name: editFullName,
+      role: editRole,
+      shift_type: (editShift || null) as 'morning' | 'afternoon' | null,
+    };
+
+    // Update state immediately
+    setEmployees((prev) =>
+      prev.map((e) => (e.id === editEmployee.id ? updatedEmployee : e))
+    );
+    setEditEmployee(null);
+
+    // Send to server (fire and forget)
     const result = await updateEmployee(editEmployee.id, {
       full_name: editFullName,
       role: editRole,
       shift_type: editShift || null,
     });
+
     if (result.success) {
       toast.success('Employee updated');
-      setEditEmployee(null);
-      load(search, page);
     } else {
+      // Revert on failure
+      setEmployees(previousEmployees);
       toast.error(result.error || 'Update failed');
     }
-    setSaving(false);
   };
 
   const handleDeactivate = async () => {
@@ -151,7 +167,6 @@ export default function EmployeesPage() {
     setAddFullName('');
     setAddEmail('');
     setAddPassword('');
-    setAddNIK('');
     setAddEmployeeId('');
     setAddRole('viewer');
     setAddShift('');
@@ -179,7 +194,6 @@ export default function EmployeesPage() {
       email: addEmail,
       password: addPassword,
       full_name: addFullName,
-      nik: addNIK || undefined,
       employee_id: addEmployeeId || undefined,
       role: addRole,
       shift_type: addShift || undefined,
@@ -199,7 +213,7 @@ export default function EmployeesPage() {
     const headers = ['Name', 'Email', 'Role', 'Shift', 'Status', 'Created'];
     const rows = employees.map((e) => [
       e.full_name, e.email, e.role, 
-      e.shift_type === 'morning' ? 'Pagi' : e.shift_type === 'afternoon' ? 'Siang' : '-',
+      e.shift_type === 'morning' ? 'Pagi' : e.shift_type === 'afternoon' ? 'Siang' : 'Full Time',
       'active', e.created_at,
     ]);
     const csv = [headers, ...rows]
@@ -209,7 +223,7 @@ export default function EmployeesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `employees_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `employees_${getWIBDate()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success('CSV exported');
@@ -238,10 +252,10 @@ export default function EmployeesPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatsCard icon={<UserCog className="w-6 h-6" />} value={employees.filter(e => e.role === 'viewer').length} label="Viewers" color="gray" />
-        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'driver').length} label="Drivers" color="blue" />
+        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'driver_bebas' || e.role === 'driver_kantor').length} label="Drivers" color="blue" />
         <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'juru_parkir').length} label="Juru Parkir" color="green" />
         <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'ob').length} label="OB" color="orange" />
-        <StatsCard icon={<Clock className="w-6 h-6" />} value={employees.length} label="Total Active" color="purple" />
+        <StatsCard icon={<Clock className="w-6 h-6" />} value={activeEmployees.length} label="Total Active" color="purple" />
       </div>
 
       {/* Table */}
@@ -287,7 +301,7 @@ export default function EmployeesPage() {
                       <Badge variant={
                         emp.role === 'admin' ? 'info' :
                         emp.role === 'viewer' ? 'default' :
-                        emp.role === 'driver' ? 'success' :
+                        emp.role === 'driver_bebas' || emp.role === 'driver_kantor' ? 'success' :
                         emp.role === 'juru_parkir' ? 'success' :
                         emp.role === 'ob' ? 'warning' :
                         emp.role === 'inactive' ? 'danger' : 'default'
@@ -309,7 +323,7 @@ export default function EmployeesPage() {
                       }`}>
                         {emp.shift_type === 'morning' ? 'Pagi' :
                          emp.shift_type === 'afternoon' ? 'Siang' :
-                         '—'}
+                         'Full Time'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -352,7 +366,8 @@ export default function EmployeesPage() {
               onChange={(e) => setEditRole(e.target.value as UserRole)}
               options={[
                 { value: 'juru_parkir', label: 'Juru Parkir' },
-                { value: 'driver', label: 'Driver' },
+                  { value: 'driver_bebas', label: 'Driver (Bebas)' },
+                  { value: 'driver_kantor', label: 'Driver (Kantor)' },
                 { value: 'ob', label: 'OB' },
                 { value: 'viewer', label: 'Viewer' },
                 { value: 'inactive', label: 'Inactive' },
@@ -363,13 +378,13 @@ export default function EmployeesPage() {
               value={editShift}
               onChange={(e) => setEditShift(e.target.value as ShiftType | '')}
               options={[
-                { value: '', label: 'Tidak Ada' },
-                { value: 'morning', label: 'Pagi (06:00 - 14:00)' },
-                { value: 'afternoon', label: 'Siang (10:00 - 18:00)' },
+                { value: '', label: 'Full Time (07:00-16:00)' },
+                { value: 'morning', label: 'Pagi (06:00-14:00)' },
+                { value: 'afternoon', label: 'Siang (10:00-18:00)' },
               ]}
             />
             <div className="flex gap-2 pt-2">
-              <Button onClick={handleSaveEdit} loading={saving} className="flex-1">
+              <Button onClick={handleSaveEdit} className="flex-1">
                 Save Changes
               </Button>
               <Button variant="secondary" onClick={() => setEditEmployee(null)}>
@@ -399,7 +414,7 @@ export default function EmployeesPage() {
                 <Badge variant={
                   detailEmployee.role === 'admin' ? 'info' :
                   detailEmployee.role === 'viewer' ? 'default' :
-                  detailEmployee.role === 'driver' ? 'success' :
+                  detailEmployee.role === 'driver_bebas' || detailEmployee.role === 'driver_kantor' ? 'success' :
                   detailEmployee.role === 'juru_parkir' ? 'success' :
                   detailEmployee.role === 'ob' ? 'warning' :
                   detailEmployee.role === 'inactive' ? 'danger' : 'default'
@@ -414,14 +429,14 @@ export default function EmployeesPage() {
               <div>
                 <p className="text-gray-500">Shift</p>
                 <p className="font-medium">
-                  {detailEmployee.shift_type === 'morning' ? 'Pagi (06:00 - 14:00)' :
-                   detailEmployee.shift_type === 'afternoon' ? 'Siang (10:00 - 18:00)' :
-                   '—'}
+                  {detailEmployee.shift_type === 'morning' ? 'Pagi (06:00-14:00)' :
+                   detailEmployee.shift_type === 'afternoon' ? 'Siang (10:00-18:00)' :
+                   'Full Time (07:00-16:00)'}
                 </p>
               </div>
               <div>
                 <p className="text-gray-500">Joined</p>
-                <p className="font-medium text-gray-600">{new Date(detailEmployee.created_at).toLocaleDateString('id-ID')}</p>
+                <p className="font-medium text-gray-600">{formatWIBDateDisplay(detailEmployee.created_at)}</p>
               </div>
             </div>
 
@@ -481,27 +496,20 @@ export default function EmployeesPage() {
             error={addErrors.password}
             placeholder="Minimal 8 karakter"
           />
-          <div className="grid grid-cols-2 gap-4">
-            <FormInput
-              label="NIK"
-              value={addNIK}
-              onChange={(e) => setAddNIK(e.target.value)}
-              placeholder="Nomor Induk Kependudukan"
-            />
-            <FormInput
-              label="Employee ID"
-              value={addEmployeeId}
-              onChange={(e) => setAddEmployeeId(e.target.value)}
-              placeholder="ID Karyawan"
-            />
-          </div>
+          <FormInput
+            label="Employee ID"
+            value={addEmployeeId}
+            onChange={(e) => setAddEmployeeId(e.target.value)}
+            placeholder="ID Karyawan"
+          />
           <FormSelect
             label="Role *"
             value={addRole}
             onChange={(e) => setAddRole(e.target.value as UserRole)}
             options={[
               { value: 'juru_parkir', label: 'Juru Parkir' },
-              { value: 'driver', label: 'Driver' },
+              { value: 'driver_bebas', label: 'Driver (Bebas)' },
+              { value: 'driver_kantor', label: 'Driver (Kantor)' },
               { value: 'ob', label: 'OB' },
               { value: 'viewer', label: 'Viewer' },
             ]}
@@ -511,9 +519,9 @@ export default function EmployeesPage() {
             value={addShift}
             onChange={(e) => setAddShift(e.target.value as ShiftType | '')}
             options={[
-              { value: '', label: 'Tidak Ada' },
-              { value: 'morning', label: 'Pagi (06:00 - 14:00)' },
-              { value: 'afternoon', label: 'Siang (10:00 - 18:00)' },
+              { value: '', label: 'Full Time (07:00-16:00)' },
+              { value: 'morning', label: 'Pagi (06:00-14:00)' },
+              { value: 'afternoon', label: 'Siang (10:00-18:00)' },
             ]}
           />
           <div className="flex gap-2 pt-2">
