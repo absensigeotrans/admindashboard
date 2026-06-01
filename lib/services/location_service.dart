@@ -13,6 +13,7 @@ class LocationService extends ChangeNotifier {
   bool _wasMocked = false;
   bool _permissionDenied = false;
   bg.Location? _currentLocation;
+  Position? _lastGpsPosition;
 
   bool get isTracking => _isTracking;
   double get currentDistance => _currentDistance;
@@ -20,6 +21,7 @@ class LocationService extends ChangeNotifier {
   bool get isMocked => _isMocked;
   bool get permissionDenied => _permissionDenied;
   bg.Location? get currentLocation => _currentLocation;
+  Position? get lastGpsPosition => _lastGpsPosition;
 
   LocationService() {
     _checkPermission();
@@ -116,6 +118,8 @@ class LocationService extends ChangeNotifier {
       );
 
       _permissionDenied = false;
+
+      _lastGpsPosition = position;
 
       // Enhanced mock detection
       _isMocked = _detectMockLocation(position);

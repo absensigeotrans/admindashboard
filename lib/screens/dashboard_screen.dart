@@ -168,6 +168,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Returns last known GPS position (from Geolocator) or background geolocation coords.
+  dynamic _getActiveCoords(LocationService locationService) {
+    if (locationService.lastGpsPosition != null) {
+      return locationService.lastGpsPosition;
+    }
+    return locationService.currentLocation?.coords;
+  }
+
   void _startDistanceUpdate() {
     _distanceUpdateTimer?.cancel();
     _distanceUpdateTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
@@ -414,26 +422,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     // Check if location is ready (skip for drivers)
-    final coords = locationService.currentLocation?.coords;
+    final coords = _getActiveCoords(locationService);
     if (coords == null && !isDriver && !locationService.isMocked) {
       // Try to get current position as fallback (except for drivers)
       await locationService.updateDistance(_officeLat, _officeLon, _radius);
-      if (locationService.currentLocation == null) {
+      if (_getActiveCoords(locationService) == null) {
         if (mounted) {
           setState(() => _isProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lokasi tidak tersedia. Mohon aktifkan GPS.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Lokasi tidak tersedia. Mohon aktifkan GPS.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
     }
-    return;
-  }
-}
 
-final now = DateTime.now();
-final currentCoords = locationService.currentLocation?.coords;
+    final now = DateTime.now();
+    final currentCoords = _getActiveCoords(locationService);
 
 // Reject invalid coordinates (0,0) — GPS not available
 if (currentCoords != null && currentCoords.latitude == 0 && currentCoords.longitude == 0) {
@@ -850,7 +858,7 @@ try {
 
     final role = authService.profile?['role'] ?? '';
     final isDriver = role == 'driver_bebas';
-    final hasLocation = locationService.currentLocation != null || isDriver;
+    final hasLocation = locationService.currentLocation != null || locationService.lastGpsPosition != null || isDriver;
     // Drivers can attend from anywhere (no radius check needed)
     final canAttend = _isLocationServiceEnabled && hasLocation && (locationService.isInRadius || isDriver) && !locationService.isMocked;
 
