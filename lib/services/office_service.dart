@@ -27,6 +27,8 @@ class OfficeService extends ChangeNotifier {
       final data = await _supabase
           .from('offices')
           .select()
+          .eq('is_active', true)
+          .order('created_at', ascending: false)
           .limit(1)
           .maybeSingle();
 

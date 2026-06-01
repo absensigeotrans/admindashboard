@@ -511,7 +511,7 @@ try {
 
      String? officeId;
      if (syncService.isOnline) {
-       final officeData = await supabase.from('offices').select('id').limit(1).maybeSingle();
+       final officeData = await supabase.from('offices').select('id').eq('is_active', true).order('created_at', ascending: false).limit(1).maybeSingle();
        officeId = officeData?['id'];
      }
 
