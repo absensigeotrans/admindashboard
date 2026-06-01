@@ -364,11 +364,12 @@ export function useReports() {
       const { start, end } = getWIBDateRange(date);
 
 
-       const { error: deleteError, count } = await supabase
-         .from('attendance')
-         .delete()
-         .gte('check_in_time', start)
-         .lte('check_in_time', end);
+       const { error: deleteError, data: deletedData } = await supabase
+          .from('attendance')
+          .delete()
+          .gte('check_in_time', start)
+          .lte('check_in_time', end)
+          .select('id');
 
        if (deleteError) {
          throw deleteError;
@@ -376,7 +377,7 @@ export function useReports() {
 
       // Clear local records since data changed
       setRecords([]);
-      return { success: true, message: `Berhasil menghapus ${count || 0} data untuk ${date}`, count };
+      return { success: true, message: `Berhasil menghapus ${deletedData?.length || 0} data untuk ${date}`, count: deletedData?.length || 0 };
     } catch (err: any) {
       const msg = err?.message || err?.details || 'Failed to delete records';
       console.error('deleteByDate catch error:', msg);
