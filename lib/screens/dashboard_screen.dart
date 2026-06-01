@@ -722,7 +722,7 @@ try {
     String? selectedStatus;
     String? customStatus;
 
-    await showDialog(
+    return await showDialog<String?>(
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
