@@ -144,7 +144,7 @@ export default function ReportsPage() {
 
   // CSV Export of currently displayed records
   const exportCSV = () => {
-    const headers = ['Employee', 'Date', 'Check-in Time', 'Check-out Time', 'Jam Kerja', 'Lembur', 'Status', 'Shift', 'Distance', 'Lat', 'Lng', 'Work Status', 'Suspicious'];
+    const headers = ['Employee', 'Date', 'Check-in Time', 'Check-out Time', 'Jam Kerja', 'Lembur', 'Status', 'Shift', 'Distance', 'Role', 'Work Status', 'Suspicious'];
      const rows = filteredRecords.map((r: any) => [
        r.profiles?.full_name || '',
        formatWIBDateDisplay(r.check_in_time).replace(/ /g, '-'),
@@ -155,8 +155,7 @@ export default function ReportsPage() {
        r.status,
        getShiftLabel(r.shift_type),
        (r.distance_from_office || 0).toFixed(2) + 'm',
-       r.check_in_latitude || '',
-       r.check_in_longitude || '',
+       (r.profiles?.role || '').replace(/_/g, ' '),
        r.work_status ?? '-',
        r.is_mocked ? 'YES' : 'NO',
      ]);
@@ -180,7 +179,7 @@ export default function ReportsPage() {
     doc.text(`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`, 14, 23);
     doc.text(`Total: ${stats.total} | Present: ${stats.present} | Late: ${stats.late} | Outside: ${stats.outside} | Avg: ${formatDistance(stats.avgDistance)}`, 14, 30);
 
-     const headers = [['Employee', 'Date', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur', 'Status', 'Shift', 'Distance', 'Coordinates', 'Work Status', 'Suspicious']];
+     const headers = [['Employee', 'Date', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur', 'Status', 'Shift', 'Distance', 'Role', 'Work Status', 'Suspicious']];
     const rows = filteredRecords.map((r: any) => [
       r.profiles?.full_name || '—',
       formatWIBDateDisplay(r.check_in_time),
@@ -191,7 +190,7 @@ export default function ReportsPage() {
       r.status.replace('_', ' '),
       getShiftLabel(r.shift_type),
       formatDistance(r.distance_from_office || 0),
-      `${r.check_in_latitude?.toFixed(4) || '-'}, ${r.check_in_longitude?.toFixed(4) || '-'}`,
+      (r.profiles?.role || '—').replace(/_/g, ' '),
       r.is_mocked ? 'YES' : 'NO',
     ]);
 
@@ -221,21 +220,19 @@ export default function ReportsPage() {
     };
 
      ws.columns = [
-       { width: 22 },
-       { width: 14 },
-       { width: 14 },
-       { width: 14 },
-       { width: 14 },
-       { width: 12 },
-       { width: 14 },
-       { width: 12 },
-       { width: 14 },
-       { width: 14 },
-       { width: 14 },
-       { width: 14 }, // Work Status
-       { width: 14 },
-       { width: 18 },
-     ];
+        { width: 22 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 12 },
+        { width: 14 },
+        { width: 12 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 18 },
+      ];
 
     const borderThin = {
       top: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
@@ -245,23 +242,23 @@ export default function ReportsPage() {
     };
 
     const r1 = ws.addRow([`Attendance Report (${from} to ${to})`]);
-    ws.mergeCells(1, 1, 1, 13);
+    ws.mergeCells(1, 1, 1, 12);
     r1.font = { bold: true, size: 14, color: { argb: 'FFFFFF' } };
     r1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
     r1.alignment = { vertical: 'middle', horizontal: 'left' };
     r1.height = 32;
 
     const r2 = ws.addRow([`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`]);
-    ws.mergeCells(2, 1, 2, 13);
+    ws.mergeCells(2, 1, 2, 12);
     r2.font = { size: 11, italic: true, color: { argb: '6B7280' } };
     r2.height = 22;
 
     ws.addRow([]);
 
      const headerRow = ws.addRow([
-       'Employee', 'Date', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur',
-       'Status', 'Shift', 'Distance', 'Lat', 'Lng', 'Work Status', 'Role', 'Suspicious',
-     ]);
+        'Employee', 'Date', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur',
+        'Status', 'Shift', 'Distance', 'Role', 'Work Status', 'Suspicious',
+      ]);
     headerRow.font = { bold: true, color: { argb: 'FFFFFF' }, size: 11 };
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
     headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -293,18 +290,17 @@ export default function ReportsPage() {
         statusDisplay[r.status] || r.status,
         getShiftLabel(r.shift_type),
         formatDistance(r.distance_from_office || 0),
-        r.check_in_latitude || '',
-        r.check_in_longitude || '',
-        r.profiles?.role || '',
+        (r.profiles?.role || '').replace(/_/g, ' '),
+        r.work_status ?? '-',
         r.is_mocked ? 'YES' : 'NO',
       ]);
 
       row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.bg } };
       row.getCell(7).font = { color: { argb: colors.fg } };
-      row.getCell(13).font = r.is_mocked ? { color: { argb: 'DC2626' }, bold: true } : {};
+      row.getCell(12).font = r.is_mocked ? { color: { argb: 'DC2626' }, bold: true } : {};
 
       row.eachCell((cell, colIdx) => {
-        if (colIdx !== 7 && colIdx !== 13) {
+        if (colIdx !== 7 && colIdx !== 12) {
           cell.border = borderThin;
         } else {
           cell.border = borderThin;
@@ -317,7 +313,7 @@ export default function ReportsPage() {
 
     ws.addRow([]);
     const sr = ws.addRow([`Total: ${filteredRecords.length} records`]);
-    ws.mergeCells(sr.number, 1, sr.number, 13);
+    ws.mergeCells(sr.number, 1, sr.number, 12);
     sr.font = { italic: true, size: 10, color: { argb: '6B7280' } };
 
     const buffer = await wb.xlsx.writeBuffer();
@@ -461,13 +457,23 @@ export default function ReportsPage() {
       },
     },
     {
-      key: 'location',
-      header: 'Location',
-      render: (row: any) => (
-        <span className="text-xs text-gray-500">
-          {row.check_in_latitude?.toFixed(4) ?? '-'}, {row.check_in_longitude?.toFixed(4) ?? '-'}
-        </span>
-      ),
+      key: 'role',
+      header: 'Role',
+      render: (row: any) => {
+        const role = row.profiles?.role || '—';
+        const map: Record<string, string> = {
+          admin: 'text-blue-700 bg-blue-100',
+          karyawan: 'text-gray-700 bg-gray-100',
+          driver_bebas: 'text-green-700 bg-green-100',
+          driver_kantor: 'text-green-700 bg-green-100',
+          juru_parkir: 'text-orange-700 bg-orange-100',
+        };
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${map[role] || 'text-gray-700 bg-gray-100'}`}>
+            {role.replace(/_/g, ' ')}
+          </span>
+        );
+      },
     },
   ];
 
