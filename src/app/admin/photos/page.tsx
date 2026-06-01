@@ -7,7 +7,7 @@ import { formatWIBTime, formatWIBDateDisplay, getWIBDaysAgo, getWIBDate } from '
 import { Badge } from '@/components/ui/Badge';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { SearchInput } from '@/components/ui/SearchInput';
-import { Search, X } from 'lucide-react';
+import { Search, X, Trash2, AlertTriangle } from 'lucide-react';
 
 interface PhotoRecord {
   id: string;
@@ -27,6 +27,8 @@ export default function PhotosPage() {
   const [to, setTo] = useState(() => getWIBDate());
   const [search, setSearch] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PhotoRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchPhotos = async (f = from, t = to) => {
     setLoading(true);
@@ -63,6 +65,24 @@ export default function PhotosPage() {
       console.error('Photo fetch error:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const path = deleteTarget.photo_url.split('/selfie_absensi/')[1];
+      if (path) {
+        await supabase.storage.from('selfie_absensi').remove([path]);
+      }
+      await supabase.from('attendance').update({ photo_url: null }).eq('id', deleteTarget.id);
+      setRecords((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (e) {
+      console.error('Delete photo error:', e);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -126,17 +146,26 @@ export default function PhotosPage() {
               className="bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-shadow"
             >
               {/* Photo */}
-              <div
-                className="relative aspect-[4/3] bg-gray-100 cursor-pointer overflow-hidden"
-                onClick={() => setSelectedPhoto(record.photo_url)}
-              >
-                <Image
-                  src={record.photo_url}
-                  alt={`${record.user_name} selfie`}
-                  fill
-                  className="object-cover hover:scale-105 transition-transform duration-300"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                />
+              <div className="relative aspect-[4/3] bg-gray-100 group">
+                <div
+                  className="absolute inset-0 cursor-pointer"
+                  onClick={() => setSelectedPhoto(record.photo_url)}
+                >
+                  <Image
+                    src={record.photo_url}
+                    alt={`${record.user_name} selfie`}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  />
+                </div>
+                <button
+                  onClick={() => setDeleteTarget(record)}
+                  className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
+                  title="Hapus foto"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
 
               {/* Info */}
@@ -168,6 +197,59 @@ export default function PhotosPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="bg-red-600 px-6 py-4 flex items-center gap-3">
+              <Trash2 className="w-5 h-5 text-white" />
+              <h3 className="text-lg font-semibold text-white">Hapus Foto</h3>
+            </div>
+            <div className="p-6">
+              <div className="flex items-start gap-4 mb-6">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-1">Yakin ingin menghapus foto ini?</h4>
+                  <p className="text-sm text-gray-600">
+                    Foto selfie <strong>{deleteTarget.user_name}</strong> tanggal{' '}
+                    {formatWIBDateDisplay(deleteTarget.check_in_time)} akan dihapus
+                    permanen dari storage. Data kehadiran tetap tersimpan.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  disabled={deleting}
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleDeletePhoto}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Menghapus...
+                    </span>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 inline mr-1" />
+                      Hapus
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
