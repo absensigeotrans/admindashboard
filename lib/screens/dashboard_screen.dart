@@ -490,7 +490,11 @@ try {
        setState(() => _isProcessing = false);
        return;
      }
-     // If user canceled dialog, treat as null (will be saved as empty)
+      // If user canceled dialog, stop check-in entirely
+      if (workStatus == null) {
+        setState(() => _isProcessing = false);
+        return;
+      }
      
      // --- Selfie capture ---
      String? photoUrl;
