@@ -67,7 +67,8 @@ export function useReports() {
             email,
             employee_id,
             nik,
-            role
+            role,
+            shift_type
           )
         `, { count: 'exact' })
         .order('check_in_time', { ascending: false })
@@ -115,7 +116,7 @@ export function useReports() {
 
       // Step 2: Enrich with shift type safely
       const result = await Promise.all(
-        (data || []).map(async (record) => {
+        (data || []).map(async (record: any) => {
           try {
             const checkInDate = new Date(record.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
             const { data: shiftData } = await supabase
@@ -127,10 +128,13 @@ export function useReports() {
 
             return {
               ...record,
-              shift_type: (shiftData as any)?.shift_type,
+              shift_type: (shiftData as any)?.shift_type || record.profiles?.shift_type,
             };
           } catch (e) {
-            return { ...record };
+            return {
+              ...record,
+              shift_type: record.profiles?.shift_type,
+            };
           }
         })
       );
@@ -173,7 +177,8 @@ export function useReports() {
             email,
             employee_id,
             nik,
-            role
+            role,
+            shift_type
           )
         `)
         .order('check_in_time', { ascending: false });
@@ -217,7 +222,7 @@ export function useReports() {
       if (fetchError) throw fetchError;
 
       const result = await Promise.all(
-        (data || []).map(async (record) => {
+        (data || []).map(async (record: any) => {
           try {
             const checkInDate = new Date(record.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
             const { data: shiftData } = await supabase
@@ -229,10 +234,13 @@ export function useReports() {
 
             return {
               ...record,
-              shift_type: (shiftData as any)?.shift_type,
+              shift_type: (shiftData as any)?.shift_type || record.profiles?.shift_type,
             };
           } catch (e) {
-            return { ...record };
+            return {
+              ...record,
+              shift_type: record.profiles?.shift_type,
+            };
           }
         })
       );
@@ -352,8 +360,13 @@ export function useReports() {
 
   // Get shift label from shift type
   const getShiftLabel = (shiftType: string | undefined | null): string => {
-    if (!shiftType || shiftType === 'default') return '—';
-    return shiftType === 'morning' ? 'Pagi' : 'Siang';
+    const map: Record<string, string> = {
+      morning: 'Pagi',
+      afternoon: 'Siang',
+      full_time: 'Full Time',
+      non_shifting: 'Non-Shifting',
+    };
+    return shiftType && map[shiftType] ? map[shiftType] : '—';
   };
 
   // Delete all attendance records for a specific date

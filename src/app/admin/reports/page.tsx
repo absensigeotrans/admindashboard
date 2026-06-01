@@ -17,7 +17,7 @@ import { getWIBDaysAgo, getWIBDate, formatWIBTime, formatWIBTimeWithSeconds, for
 import { formatDistance } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle, Database, Sun, Sunset, Trash2, Calendar, Timer, FileSpreadsheet } from 'lucide-react';
+import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle, Database, Sun, Sunset, Trash2, Calendar, Timer, FileSpreadsheet, Minus } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
@@ -424,14 +424,26 @@ export default function ReportsPage() {
       render: (row: any) => {
         const shiftLabel = getShiftLabel(row.shift_type);
         if (!row.shift_type) return <span className="text-gray-400 text-xs">—</span>;
+
+        const iconMap: Record<string, [typeof Sun, string]> = {
+          morning: [Sun, 'text-yellow-600'],
+          afternoon: [Sunset, 'text-orange-500'],
+          full_time: [Clock, 'text-blue-600'],
+          non_shifting: [Minus, 'text-gray-400'],
+        };
+        const [Icon, color] = iconMap[row.shift_type] || [Sun, 'text-gray-400'];
+
+        const colorMap: Record<string, string> = {
+          morning: 'text-yellow-700',
+          afternoon: 'text-orange-700',
+          full_time: 'text-blue-700',
+          non_shifting: 'text-gray-500',
+        };
+
         return (
           <div className="flex items-center gap-1">
-            {row.shift_type === 'morning' ? (
-              <Sun className="w-3 h-3 text-yellow-600" />
-            ) : (
-              <Sunset className="w-3 h-3 text-orange-500" />
-            )}
-            <span className={`text-xs font-medium ${row.shift_type === 'morning' ? 'text-yellow-700' : 'text-orange-700'}`}>
+            <Icon className={`w-3 h-3 ${color}`} />
+            <span className={`text-xs font-medium ${colorMap[row.shift_type] || 'text-gray-500'}`}>
               {shiftLabel}
             </span>
           </div>

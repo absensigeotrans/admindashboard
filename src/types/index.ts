@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'viewer' | 'driver_bebas' | 'driver_kantor' | 'juru_parkir' | 'ob' | 'inactive';
 
-export type ShiftType = 'morning' | 'afternoon';
+export type ShiftType = 'morning' | 'afternoon' | 'full_time' | 'non_shifting';
 
 export type AttendanceStatus = 'present' | 'late' | 'outside_radius';
 
