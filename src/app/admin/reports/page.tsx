@@ -15,8 +15,6 @@ import { Attendance, AttendanceStatus, ShiftType } from '@/types';
 import { format } from 'date-fns';
 import { getWIBDaysAgo, getWIBDate, formatWIBTime, formatWIBTimeWithSeconds, formatWIBDateDisplay } from '@/lib/timezone';
 import { formatDistance } from '@/lib/utils';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle, Database, Sun, Sunset, Trash2, Calendar, Timer, FileSpreadsheet, Minus } from 'lucide-react';
 
 const PAGE_SIZE = 50;
@@ -170,7 +168,11 @@ export default function ReportsPage() {
     toast.success(`Exported ${filteredRecords.length} records`);
   };
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
     const doc = new jsPDF('landscape');
     const title = `Attendance Report (${from} to ${to})`;
     doc.setFontSize(16);

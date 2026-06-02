@@ -58,7 +58,7 @@ export function useDashboardAnalytics() {
       return result as DashboardAnalytics;
     },
     {
-      revalidateOnFocus: true,
+      revalidateOnFocus: false,
       dedupingInterval: 30000,
       keepPreviousData: true,
     },

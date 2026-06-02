@@ -3,6 +3,44 @@ import { supabase } from '@/lib/supabase';
 import { Attendance, AttendanceStatus, ShiftType } from '@/types';
 import { getWIBDateRange } from '@/lib/timezone';
 
+async function enrichWithShiftType(records: any[]): Promise<any[]> {
+  if (records.length === 0) return [];
+
+  const userIds = [...new Set(records.map((r) => r.user_id))];
+  const dates = [
+    ...new Set(
+      records.map((r) =>
+        new Date(r.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+      )
+    ),
+  ];
+
+  if (dates.length === 0) {
+    return records.map((r) => ({ ...r, shift_type: r.profiles?.shift_type }));
+  }
+
+  const minDate = dates.reduce((a, b) => (a < b ? a : b));
+  const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+
+  const { data: allShifts } = await supabase
+    .from('user_shift_schedules')
+    .select('user_id, schedule_date, shift_type')
+    .in('user_id', userIds)
+    .gte('schedule_date', minDate)
+    .lte('schedule_date', maxDate);
+
+  const shiftMap = new Map<string, string>();
+  for (const s of allShifts || []) {
+    shiftMap.set(`${s.user_id}|${s.schedule_date}`, (s as any).shift_type);
+  }
+
+  return records.map((record) => {
+    const checkInDate = new Date(record.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+    const shiftType = shiftMap.get(`${record.user_id}|${checkInDate}`) || record.profiles?.shift_type;
+    return { ...record, shift_type: shiftType };
+  });
+}
+
 interface ReportFilters {
   from?: string;
   to?: string;
@@ -114,30 +152,8 @@ export function useReports() {
       const { data, error: fetchError, count } = await query;
       if (fetchError) throw fetchError;
 
-      // Step 2: Enrich with shift type safely
-      const result = await Promise.all(
-        (data || []).map(async (record: any) => {
-          try {
-            const checkInDate = new Date(record.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-            const { data: shiftData } = await supabase
-              .from('user_shift_schedules')
-              .select('shift_type')
-              .eq('user_id', record.user_id)
-              .eq('schedule_date', checkInDate)
-              .maybeSingle();
-
-            return {
-              ...record,
-              shift_type: (shiftData as any)?.shift_type || record.profiles?.shift_type,
-            };
-          } catch (e) {
-            return {
-              ...record,
-              shift_type: record.profiles?.shift_type,
-            };
-          }
-        })
-      );
+      // Step 2: Enrich with shift type via single batch query
+      const result = await enrichWithShiftType(data || []);
 
       setRecords(result as AttendanceWithProfile[]);
       return { data: result as AttendanceWithProfile[], count: count || 0 };
@@ -221,29 +237,7 @@ export function useReports() {
       const { data, error: fetchError } = await query;
       if (fetchError) throw fetchError;
 
-      const result = await Promise.all(
-        (data || []).map(async (record: any) => {
-          try {
-            const checkInDate = new Date(record.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-            const { data: shiftData } = await supabase
-              .from('user_shift_schedules')
-              .select('shift_type')
-              .eq('user_id', record.user_id)
-              .eq('schedule_date', checkInDate)
-              .maybeSingle();
-
-            return {
-              ...record,
-              shift_type: (shiftData as any)?.shift_type || record.profiles?.shift_type,
-            };
-          } catch (e) {
-            return {
-              ...record,
-              shift_type: record.profiles?.shift_type,
-            };
-          }
-        })
-      );
+      const result = await enrichWithShiftType(data || []);
 
       setRecords(result as AttendanceWithProfile[]);
       return { data: result as AttendanceWithProfile[], count: result.length };

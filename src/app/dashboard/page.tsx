@@ -1,31 +1,28 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import useSWR from 'swr';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useOffices } from '@/hooks/useOffices';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useReports } from '@/hooks/useReports';
+import dynamic from 'next/dynamic';
 import { useDashboardAnalytics, Period } from '@/hooks/useDashboardAnalytics';
 import { supabase } from '@/lib/supabase';
 import { StatsCard } from '@/components/ui/StatsCard';
-import { ChartCard } from '@/components/admin/ChartCard';
 import { formatDistance } from '@/lib/utils';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks } from 'date-fns';
-import { getWIBDate, getWIBDateObj, formatWIBDate, formatWIBTime, formatWIBDateHeader, formatWIBMonth, formatWIBChartTick, formatWIBChartLabel } from '@/lib/timezone';
+import { getWIBDate, getWIBDateObj, formatWIBDate, formatWIBTime, formatWIBDateHeader, formatWIBMonth } from '@/lib/timezone';
 import {
   CheckCircle, Clock, XCircle, Users, Building2, MapPin,
   TrendingUp, Calendar, ArrowUpRight, AlertTriangle,
   TrendingDown, Award, AlertCircle, LogOut, Navigation,
   UserCheck, UserX,
 } from 'lucide-react';
-import {
-  PieChart, Pie, Cell,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  LineChart, Line,
-  Tooltip, Legend, ResponsiveContainer,
-} from 'recharts';
-import type { PieLabelRenderProps } from 'recharts';
+
+const StatusPieChart = dynamic(() => import('@/components/admin/charts/AnalyticsCharts').then((m) => m.StatusPieChart), { ssr: false });
+const DailyAttendanceChart = dynamic(() => import('@/components/admin/charts/AnalyticsCharts').then((m) => m.DailyAttendanceChart), { ssr: false });
+const LateTrendChart = dynamic(() => import('@/components/admin/charts/AnalyticsCharts').then((m) => m.LateTrendChart), { ssr: false });
 
 interface WeeklyStats {
   totalClockIns: number;
@@ -83,7 +80,7 @@ export default function ViewerDashboard() {
   const loadData = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
-      fetchHistory(500),
+      fetchHistory(100),
       fetchOffices(),
       fetchEmployees(1, 10),
     ]);
@@ -95,7 +92,7 @@ export default function ViewerDashboard() {
   useEffect(() => {
     loadData();
     const interval = setInterval(() => {
-      loadData();
+      if (!document.hidden) loadData();
     }, 60000);
     return () => clearInterval(interval);
   }, [loadData]);
@@ -129,6 +126,7 @@ export default function ViewerDashboard() {
       return d >= monthStart && d <= monthEnd;
     });
 
+    // -- Effect 1: Weekly/Monthly Stats --
     const avgDistance = weekRecords.length > 0
       ? weekRecords.reduce((s, r) => s + (r.distance_from_office || 0), 0) / weekRecords.length
       : 0;
@@ -186,12 +184,12 @@ export default function ViewerDashboard() {
     const prevWeekPresent = prevWeekRecords.filter((r) => r.status === 'present').length;
     const prevWeekLate = prevWeekRecords.filter((r) => r.status === 'late').length;
 
-    const todayPresent = todayRecords.filter((r) => r.status === 'present').length;
-    const todayLate = todayRecords.filter((r) => r.status === 'late').length;
+    const todayPresentCount = todayRecords.filter((r) => r.status === 'present').length;
+    const todayLateCount = todayRecords.filter((r) => r.status === 'late').length;
 
     setPeriodComparison({
-      presentChange: prevWeekPresent > 0 ? Math.round(((todayPresent - prevWeekPresent / 7) / (prevWeekPresent / 7)) * 100) : 0,
-      lateChange: prevWeekLate > 0 ? Math.round(((todayLate - prevWeekLate / 7) / (prevWeekLate / 7)) * 100) : 0,
+      presentChange: prevWeekPresent > 0 ? Math.round(((todayPresentCount - prevWeekPresent / 7) / (prevWeekPresent / 7)) * 100) : 0,
+      lateChange: prevWeekLate > 0 ? Math.round(((todayLateCount - prevWeekLate / 7) / (prevWeekLate / 7)) * 100) : 0,
       totalChange: prevWeekRecords.length > 0 ? Math.round(((weekRecords.length - prevWeekRecords.length) / prevWeekRecords.length) * 100) : 0,
     });
 
@@ -211,19 +209,8 @@ export default function ViewerDashboard() {
         };
       })
     );
-  }, [history]);
 
-  useEffect(() => {
-    if (history.length === 0) return;
-
-    const now = new Date();
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
-    const weekRecords = history.filter((h) => {
-      const d = new Date(h.check_in_time);
-      return d >= weekStart && d <= weekEnd;
-    });
-
+    // -- Effect 2: Top/Bottom Performers (reuses weekRecords) --
     const userStats: Record<string, { name: string; employee_id?: string; present: number; late: number; total: number }> = {};
     weekRecords.forEach((r) => {
       const uid = r.user_id;
@@ -269,13 +256,12 @@ export default function ViewerDashboard() {
   const employeeCount = employeeCountData ?? 0;
 
   const today = getWIBDate();
-  const todayPresent = history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'present').length;
-  const todayLate = history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'late').length;
-  const todayOutside = history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'outside_radius').length;
+  const todayPresent = useMemo(() => history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'present').length, [history, today]);
+  const todayLate = useMemo(() => history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'late').length, [history, today]);
+  const todayOutside = useMemo(() => history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'outside_radius').length, [history, today]);
 
   const analytics = useDashboardAnalytics();
 
-  const PIE_COLORS = ['#22c55e', '#eab308', '#ef4444'];
   const periods: { value: Period; label: string }[] = [
     { value: 'today', label: 'Today' },
     { value: '7d', label: '7 Days' },
@@ -522,124 +508,11 @@ export default function ViewerDashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartCard
-            title="Status Distribution"
-            subtitle="Present vs Late vs Outside Radius"
-            loading={analytics.loading}
-            error={analytics.error}
-          >
-            {analytics.data ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Present', value: analytics.data.statusDistribution.present },
-                      { name: 'Late', value: analytics.data.statusDistribution.late },
-                      { name: 'Outside', value: analytics.data.statusDistribution.outside },
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={90}
-                    dataKey="value"
-                    label={(entry: PieLabelRenderProps) =>
-                      `${entry.name ?? ''} ${((entry.percent ?? 0) * 100).toFixed(0)}%`}
-                  >
-                    {PIE_COLORS.map((color, idx) => (
-                      <Cell key={idx} fill={color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [value ?? 0, 'Records']} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-                No data for this period
-              </div>
-            )}
-          </ChartCard>
-
-          <ChartCard
-            title="Daily Attendance"
-            subtitle="Per-day breakdown for selected period"
-            loading={analytics.loading}
-            error={analytics.error}
-          >
-            {analytics.data && analytics.data.dailyAttendance.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={analytics.data.dailyAttendance}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(d) => formatWIBChartTick(d)}
-                    tick={{ fontSize: 11 }}
-                  />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    labelFormatter={(d) => formatWIBChartLabel(d)}
-                  />
-                  <Legend />
-                  <Bar dataKey="present" name="Present" stackId="a" fill="#22c55e" />
-                  <Bar dataKey="late" name="Late" stackId="a" fill="#eab308" />
-                  <Bar dataKey="outside" name="Outside" stackId="a" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-                No attendance records for this period
-              </div>
-            )}
-          </ChartCard>
+          <StatusPieChart data={analytics.data} loading={analytics.loading} error={analytics.error} />
+          <DailyAttendanceChart data={analytics.data} loading={analytics.loading} error={analytics.error} />
         </div>
 
-        <ChartCard
-          title="Late Trend"
-          subtitle="Daily late attendance count"
-          loading={analytics.loading}
-          error={analytics.error}
-        >
-          {analytics.data && analytics.data.lateTrend.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={analytics.data.lateTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(d) => formatWIBChartTick(d)}
-                  tick={{ fontSize: 11 }}
-                />
-                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip
-                  labelFormatter={(d) => formatWIBChartLabel(d)}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="lateCount"
-                  name="Late Count"
-                  stroke="#eab308"
-                  strokeWidth={2}
-                  dot={{ fill: '#eab308', r: 3 }}
-                />
-                {analytics.data.lateTrend.some((d) => d.avgLateMinutes > 0) && (
-                  <Line
-                    type="monotone"
-                    dataKey="avgLateMinutes"
-                    name="Avg Late (min)"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    dot={{ fill: '#f97316', r: 3 }}
-                    strokeDasharray="5 5"
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-              No late records for this period
-            </div>
-          )}
-        </ChartCard>
+        <LateTrendChart data={analytics.data} loading={analytics.loading} error={analytics.error} />
       </div>
 
       <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden relative">
