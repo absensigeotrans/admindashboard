@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import useSWR from 'swr';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useOffices } from '@/hooks/useOffices';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -95,7 +96,7 @@ export default function ViewerDashboard() {
     loadData();
     const interval = setInterval(() => {
       loadData();
-    }, 30000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [loadData]);
 
@@ -254,13 +255,18 @@ export default function ViewerDashboard() {
     setBottomPerformers([...performers].sort((a, b) => a.rate - b.rate).slice(0, 5));
   }, [history]);
 
-  const [employeeCount, setEmployeeCount] = useState(0);
-  useEffect(() => {
-    supabase.from('profiles').select('id', { count: 'exact', head: true })
-      .not('role', 'eq', 'inactive')
-      .not('role', 'eq', 'admin')
-      .then(({ count }) => setEmployeeCount(count || 0));
-  }, []);
+  const { data: employeeCountData } = useSWR(
+    'employee-count',
+    async () => {
+      const { count } = await supabase.from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .not('role', 'eq', 'inactive')
+        .not('role', 'eq', 'admin');
+      return count || 0;
+    },
+    { dedupingInterval: 60000, revalidateOnFocus: false },
+  );
+  const employeeCount = employeeCountData ?? 0;
 
   const today = getWIBDate();
   const todayPresent = history.filter((h) => formatWIBDate(h.check_in_time) === today && h.status === 'present').length;

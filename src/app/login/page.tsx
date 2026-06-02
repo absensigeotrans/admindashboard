@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Toast } from '@/components/Toast';
 import { Mail, Lock, Eye, EyeOff, Loader2, Ship, Anchor, Waves, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 
 export default function LoginPage() {
+  const router = useRouter();
   const { user, profile, signIn, signUp, loading: authLoading } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -26,12 +28,12 @@ export default function LoginPage() {
     if (authLoading) return;
     if (user && profile && typeof window !== 'undefined') {
       if (profile.role === 'admin') {
-        window.location.href = '/admin';
+        router.push('/admin');
       } else {
-        window.location.href = '/dashboard';
+        router.push('/dashboard');
       }
     }
-  }, [user, profile, authLoading]);
+  }, [user, profile, authLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -327,10 +327,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .limit(1);
 
       final synced = results.isNotEmpty ? results.first : null;
+      debugPrint('[Attendance] _fetchTodayAttendance: found=${results.length}, synced=$synced');
 
       if (synced != null) {
-        // Check if already checked out
         final hasCheckout = synced['check_out_time'] != null;
+        debugPrint('[Attendance] hasCheckout=$hasCheckout, check_out_time=${synced['check_out_time']}');
         if (mounted) {
           setState(() {
             _todayAttendance = hasCheckout ? null : synced;
@@ -342,11 +343,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final syncService = Provider.of<SyncService>(context, listen: false);
       final localData = await syncService.getTodayAttendance(user.id);
+      debugPrint('[Attendance] Fallback localData: ${localData.length} items');
 
       if (localData.isNotEmpty) {
-        // Check if local record already has checkout
         final firstRecord = localData.first;
         final hasCheckout = firstRecord['check_out_time'] != null;
+        debugPrint('[Attendance] Local hasCheckout=$hasCheckout, check_out_time=${firstRecord['check_out_time']}');
         if (mounted) {
           setState(() {
             _todayAttendance = hasCheckout ? null : firstRecord;
@@ -362,7 +364,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Error fetching attendance: $e');
+      debugPrint('[Attendance] Error fetching attendance: $e');
     }
   }
 
@@ -524,7 +526,7 @@ try {
      }
 
       if (syncService.isOnline) {
-        final result = await supabase.from('attendance').insert({
+        final inserted = await supabase.from('attendance').insert({
           'user_id': user.id,
           'check_in_time': now.toUtc().toIso8601String(),
           'check_in_latitude': currentCoords?.latitude,
@@ -534,28 +536,70 @@ try {
           'office_id': officeId,
           if (photoUrl != null) 'photo_url': photoUrl,
           'work_status': workStatus ?? 'WFO',
-        }).select('status').maybeSingle();
+        }).select().maybeSingle();
 
-       if (result != null && mounted) {
-         await _showCheckInResultDialog(result['status']);
-       }
-       NotificationService().showCheckInSuccess();
-     } else {
-       await syncService.saveAttendanceOffline(
-         userId: user.id,
-         checkInTime: now,
-         checkInLatitude: currentCoords?.latitude ?? 0,
-         checkInLongitude: currentCoords?.longitude ?? 0,
-         checkInDistance: locationService.currentDistance,
-         isMocked: locationService.isMocked,
-         photoUrl: photoUrl,
-         localPhotoPath: localPhotoPath,
+        debugPrint('[Attendance] Insert result: $inserted');
+
+        if (inserted != null && mounted) {
+          setState(() {
+            _todayAttendance = inserted;
+            _localAttendanceId = null;
+          });
+          await _showCheckInResultDialog(inserted['status']);
+          NotificationService().showCheckInSuccess();
+        } else if (mounted) {
+          setState(() {
+            _todayAttendance = {
+              'user_id': user.id,
+              'check_in_time': now.toUtc().toIso8601String(),
+              'check_in_latitude': currentCoords?.latitude,
+              'check_in_longitude': currentCoords?.longitude,
+              'is_mocked': locationService.isMocked,
+              'distance_from_office': locationService.currentDistance,
+              'work_status': workStatus ?? 'WFO',
+            };
+            _localAttendanceId = null;
+          });
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Check-in tersimpan lokal, menunggu sinkronisasi...'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          syncService.forceSync();
+        }
+      } else {
+        final saved = await syncService.saveAttendanceOffline(
+          userId: user.id,
+          checkInTime: now,
+          checkInLatitude: currentCoords?.latitude ?? 0,
+          checkInLongitude: currentCoords?.longitude ?? 0,
+          checkInDistance: locationService.currentDistance,
+          isMocked: locationService.isMocked,
+          photoUrl: photoUrl,
+          localPhotoPath: localPhotoPath,
           workStatus: workStatus ?? 'WFO',
-       );
-     }
-  }
+        );
+        if (saved && mounted) {
+          setState(() {
+            _todayAttendance = {
+              'user_id': user.id,
+              'check_in_time': now.toUtc().toIso8601String(),
+              'check_in_latitude': currentCoords?.latitude,
+              'check_in_longitude': currentCoords?.longitude,
+              'is_mocked': locationService.isMocked,
+              'distance_from_office': locationService.currentDistance,
+              'work_status': workStatus ?? 'WFO',
+            };
+            _localAttendanceId = null;
+          });
+        }
+      }
+      }
 
-  await _fetchTodayAttendance();
+  debugPrint('[Attendance] Check-in/out complete, refreshing state...');
 } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -563,6 +607,7 @@ try {
         );
       }
     } finally {
+      await _fetchTodayAttendance();
       if (mounted) setState(() => _isProcessing = false);
     }
   }

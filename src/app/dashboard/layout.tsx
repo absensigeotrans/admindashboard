@@ -1,21 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { ViewerSidebar, MobileMenuButton } from '@/components/dashboard/ViewerSidebar';
 import { ToastContainer } from '@/components/ui/Toast';
 import { AlertTriangle } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const { user, profile, loading: authLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      window.location.href = '/login';
+      router.push('/login');
     }
-  }, [user, profile, authLoading]);
+  }, [user, profile, authLoading, router]);
 
   if (authLoading) {
     return (
@@ -37,7 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             Your account profile was not found. Please contact the administrator.
           </p>
           <button
-            onClick={() => { window.location.href = '/login'; }}
+            onClick={() => router.push('/login')}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Back to Login
