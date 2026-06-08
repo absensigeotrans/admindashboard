@@ -14,7 +14,7 @@ import { FormInput, FormSelect } from '@/components/ui/FormInput';
 import { toast } from '@/components/ui/Toast';
 import { Profile, UserRole, ShiftType } from '@/types';
 import { getWIBDate, formatWIBDateDisplay } from '@/lib/timezone';
-import { Users, Building2, UserCog, Download, Clock, UserPlus } from 'lucide-react';
+import { Users, Building2, UserCog, Download, Clock, UserPlus, Trash2 } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
@@ -22,6 +22,7 @@ export default function EmployeesPage() {
   const {
     employees, setEmployees, loading, fetchEmployees, updateEmployee,
     toggleRole, deactivateEmployee, activateEmployee, createEmployee,
+    deleteEmployee,
   } = useEmployees();
   const { offices } = useOffices();
 
@@ -35,6 +36,9 @@ export default function EmployeesPage() {
   const [editRole, setEditRole] = useState<UserRole>('viewer');
   const [editShift, setEditShift] = useState<ShiftType | ''>('');
   const [saving, setSaving] = useState(false);
+  
+  // Delete confirm modal
+  const [deleteConfirmEmployee, setDeleteConfirmEmployee] = useState<Profile | null>(null);
 
   // Detail modal
   const [detailEmployee, setDetailEmployee] = useState<Profile | null>(null);
@@ -208,6 +212,21 @@ export default function EmployeesPage() {
     }
   };
 
+  // Handle delete employee
+  const handleDeleteEmployee = async () => {
+    if (!deleteConfirmEmployee) return;
+    setSaving(true);
+    const result = await deleteEmployee(deleteConfirmEmployee.id);
+    setSaving(false);
+    if (result.success) {
+      toast.success(result.message || 'Karyawan berhasil dihapus');
+      setDeleteConfirmEmployee(null);
+      load(search, page);
+    } else {
+      toast.error(result.error || 'Gagal menghapus karyawan');
+    }
+  };
+
   // CSV Export
   const exportCSV = () => {
     const headers = ['Name', 'Email', 'Role', 'Shift', 'Status', 'Created'];
@@ -331,9 +350,14 @@ export default function EmployeesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Button size="sm" variant="ghost" onClick={() => openEdit(emp)}>
-                        Edit
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => openEdit(emp)}>
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="danger" className="text-xs py-1 px-2.5" onClick={() => setDeleteConfirmEmployee(emp)}>
+                          <Trash2 className="w-3.5 h-3.5" /> Hapus
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -543,6 +567,39 @@ export default function EmployeesPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteConfirmEmployee}
+        onClose={() => setDeleteConfirmEmployee(null)}
+        title="Hapus Akun Karyawan"
+        size="sm"
+      >
+        {deleteConfirmEmployee && (
+          <div className="space-y-4">
+            <div className="bg-red-50 text-red-800 p-3 rounded-lg text-sm border border-red-200">
+              <p className="font-semibold">⚠️ Peringatan Kritis:</p>
+              <p className="mt-1">
+                Menghapus karyawan <strong>{deleteConfirmEmployee.full_name}</strong> ({deleteConfirmEmployee.email}) akan menghapus akun tersebut dari database <strong>secara permanen</strong>.
+              </p>
+              <p className="mt-1">
+                Seluruh data riwayat kehadiran, durasi lembur, serta pengajuan cuti yang terkait akan dihapus bersih (CASCADE DELETE) dan tidak dapat dikembalikan.
+              </p>
+            </div>
+            <p className="text-gray-600 text-sm">
+              Apakah Anda yakin ingin melanjutkan tindakan ini?
+            </p>
+            <div className="flex gap-2 pt-2">
+              <Button variant="danger" onClick={handleDeleteEmployee} loading={saving} className="flex-1">
+                <Trash2 className="w-4 h-4" /> Ya, Hapus Akun
+              </Button>
+              <Button variant="secondary" onClick={() => setDeleteConfirmEmployee(null)} disabled={saving}>
+                Batal
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
     </div>

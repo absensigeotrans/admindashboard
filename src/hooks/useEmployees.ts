@@ -119,6 +119,36 @@ export function useEmployees() {
     }
   }, [fetchEmployees]);
 
+  // Delete an employee via server API route (uses service_role key)
+  const deleteEmployee = useCallback(async (userId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        return { success: false, error: result.error || 'Gagal menghapus karyawan' };
+      }
+
+      // Refresh list
+      await fetchEmployees();
+
+      return { success: true, message: result.message || 'Karyawan berhasil dihapus' };
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to delete employee';
+      setError(msg);
+      return { success: false, error: msg };
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchEmployees]);
+
   return {
     employees,
     setEmployees,
@@ -130,5 +160,6 @@ export function useEmployees() {
     deactivateEmployee,
     activateEmployee,
     createEmployee,
+    deleteEmployee,
   };
 }
