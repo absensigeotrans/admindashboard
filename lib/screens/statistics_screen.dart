@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import '../utils/timezone_utils.dart';
 
 class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({super.key});
@@ -75,7 +76,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Map<String, Map<String, int>> get _dailyStats {
     final map = <String, Map<String, int>>{};
     for (final r in _records) {
-      final date = (r['check_in_time'] as String).substring(0, 10);
+      final date = wibDateKey(r['check_in_time'] as String);
       map.putIfAbsent(date, () => {'present': 0, 'late': 0, 'outside': 0});
       final status = r['status'] as String? ?? 'present';
       if (map[date]!.containsKey(status)) {
@@ -103,7 +104,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Widget _buildSummaryGrid() {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
@@ -231,7 +231,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           children: [
             const Text('Status Distribution', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text('${DateFormat('MMMM yyyy').format(_selectedMonth)}',
+            Text(DateFormat('MMMM yyyy').format(_selectedMonth),
                 style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             const SizedBox(height: 16),
             SizedBox(
@@ -318,7 +318,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                             isCurved: true,
                             color: Colors.orange,
                             barWidth: 2,
-                            dotData: FlDotData(show: true, getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(radius: 3, color: Colors.orange, strokeWidth: 0)),
+                            dotData: FlDotData(show: true, getDotPainter: (_, _, _, _) => FlDotCirclePainter(radius: 3, color: Colors.orange, strokeWidth: 0)),
                             belowBarData: BarAreaData(show: true, color: Colors.orange.withOpacity(0.1)),
                           ),
                         ],

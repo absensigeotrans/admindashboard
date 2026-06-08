@@ -5,15 +5,12 @@ import 'services/auth_service.dart';
 import 'services/location_service.dart';
 import 'services/admin_service.dart';
 import 'services/sync_service.dart';
-import 'services/database_helper.dart';
 import 'services/leave_service.dart';
 import 'services/notification_service.dart';
 import 'services/office_service.dart';
-import 'screens/shift_selection_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/admin_screen.dart';
-import 'screens/history_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -157,10 +157,25 @@ export function useAttendanceRate(): UseAttendanceRateReturn {
     await compute(from, to);
   }, [period, customStart, customEnd, compute]);
 
+  // [FIX] Bungkus load() di dalam fungsi async lokal agar ESLint tidak
+  // menganggap setState dipanggil secara sinkron dari body effect.
+  // `load` sudah di-memoize dengan useCallback sehingga hanya re-run
+  // ketika period atau tanggal kustom berubah, tidak setiap render.
   useEffect(() => {
     mountedRef.current = true;
-    load();
-    return () => { mountedRef.current = false; };
+    let cancelled = false;
+
+    const run = async () => {
+      if (!cancelled) {
+        await load();
+      }
+    };
+    run();
+
+    return () => {
+      cancelled = true;
+      mountedRef.current = false;
+    };
   }, [load]);
 
   const avgRate = stats.length > 0

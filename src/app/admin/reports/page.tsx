@@ -13,11 +13,11 @@ import { Table } from '@/components/ui/Table';
 import { toast } from '@/components/ui/Toast';
 import { Attendance, AttendanceStatus, ShiftType } from '@/types';
 import { format } from 'date-fns';
-import { getWIBDaysAgo, getWIBDate, formatWIBTime, formatWIBTimeWithSeconds, formatWIBDateDisplay } from '@/lib/timezone';
+import { getWIBDaysAgo, getWIBDate, formatWIBTime, formatWIBDate, formatWIBTimeWithSeconds, formatWIBDateDisplay, formatWIBDateHeader } from '@/lib/timezone';
 import { formatDistance } from '@/lib/utils';
-import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle, Database, Sun, Sunset, Trash2, Calendar, Timer, FileSpreadsheet, Minus } from 'lucide-react';
+import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle, Database, Sun, Sunset, Trash2, Calendar, Timer, FileSpreadsheet, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
 function formatDuration(minutes: number | null): string {
   if (!minutes || minutes <= 0) return '—';
@@ -47,6 +47,9 @@ export default function ReportsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteDate, setDeleteDate] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Grouped cards and expanded states
+  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async (f = from, t = to, s = status, p = page, q = search) => {
     // driver_bebas doesn't use geofencing, so exclude 'outside_radius' status
@@ -111,6 +114,49 @@ export default function ReportsPage() {
     const totalOvertime = filteredRecords.reduce((s, r) => s + (r.overtime_minutes || 0), 0);
     setStats({ ...computed, totalOvertime });
   }, [filteredRecords, getStats]);
+
+  // Group filtered records by date
+  const groupedByDate = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    filteredRecords.forEach((record) => {
+      const dateKey = formatWIBDate(record.check_in_time);
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(record);
+    });
+
+    // Sort dates descending
+    return Object.keys(groups)
+      .sort((a, b) => b.localeCompare(a))
+      .reduce<Record<string, any[]>>((acc, key) => {
+        acc[key] = groups[key];
+        return acc;
+      }, {});
+  }, [filteredRecords]);
+
+  // Auto-expand the first date card by default
+  useEffect(() => {
+    const dates = Object.keys(groupedByDate);
+    if (dates.length > 0) {
+      setExpandedDates((prev) => {
+        if (Object.keys(prev).length > 0) return prev;
+        return { [dates[0]]: true };
+      });
+    }
+  }, [groupedByDate]);
+
+  const handleExpandAll = () => {
+    const allExpanded: Record<string, boolean> = {};
+    Object.keys(groupedByDate).forEach((dateKey) => {
+      allExpanded[dateKey] = true;
+    });
+    setExpandedDates(allExpanded);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedDates({});
+  };
 
   const handleFilter = () => {
     setPage(1);
@@ -181,20 +227,44 @@ export default function ReportsPage() {
     doc.text(`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`, 14, 23);
     doc.text(`Total: ${stats.total} | Present: ${stats.present} | Late: ${stats.late} | Outside: ${stats.outside} | Avg: ${formatDistance(stats.avgDistance)}`, 14, 30);
 
-     const headers = [['Employee', 'Date', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur', 'Status', 'Shift', 'Distance', 'Role', 'Work Status', 'Suspicious']];
-    const rows = filteredRecords.map((r: any) => [
-      r.profiles?.full_name || '—',
-      formatWIBDateDisplay(r.check_in_time),
-      formatWIBTime(r.check_in_time),
-      r.check_out_time ? formatWIBTime(r.check_out_time) : '—',
-      formatDuration(r.work_duration_minutes),
-      formatDuration(r.overtime_minutes),
-      r.status.replace('_', ' '),
-      getShiftLabel(r.shift_type),
-      formatDistance(r.distance_from_office || 0),
-      (r.profiles?.role || '—').replace(/_/g, ' '),
-      r.is_mocked ? 'YES' : 'NO',
-    ]);
+    const headers = [['Employee', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur', 'Status', 'Shift', 'Distance', 'Role', 'Work Status', 'Suspicious']];
+    
+    // Group records by date for PDF export
+    const grouped: Record<string, any[]> = {};
+    filteredRecords.forEach((r: any) => {
+      const dateKey = formatWIBDate(r.check_in_time);
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(r);
+    });
+
+    const rows: any[] = [];
+    Object.keys(grouped).sort((a, b) => b.localeCompare(a)).forEach((dateKey) => {
+      // Add section sub-header row for date
+      rows.push([
+        {
+          content: formatWIBDateHeader(dateKey),
+          colSpan: 11,
+          styles: { fillColor: [239, 246, 255], fontStyle: 'bold', textColor: [29, 78, 216], halign: 'left' }
+        }
+      ]);
+      
+      // Add records for that date
+      grouped[dateKey].forEach((r: any) => {
+        rows.push([
+          r.profiles?.full_name || '—',
+          formatWIBTime(r.check_in_time),
+          r.check_out_time ? formatWIBTime(r.check_out_time) : '—',
+          formatDuration(r.work_duration_minutes),
+          formatDuration(r.overtime_minutes),
+          r.status.replace('_', ' '),
+          getShiftLabel(r.shift_type),
+          formatDistance(r.distance_from_office || 0),
+          (r.profiles?.role || '—').replace(/_/g, ' '),
+          r.work_status ?? '—',
+          r.is_mocked ? 'YES' : 'NO',
+        ]);
+      });
+    });
 
     autoTable(doc, {
       head: headers,
@@ -221,20 +291,19 @@ export default function ReportsPage() {
       outside_radius: 'Luar Area',
     };
 
-     ws.columns = [
-        { width: 22 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 12 },
-        { width: 14 },
-        { width: 12 },
-        { width: 14 },
-        { width: 14 },
-        { width: 14 },
-        { width: 18 },
-      ];
+    ws.columns = [
+      { width: 22 }, // Employee
+      { width: 14 }, // Check-in
+      { width: 14 }, // Check-out
+      { width: 14 }, // Jam Kerja
+      { width: 14 }, // Lembur
+      { width: 14 }, // Status
+      { width: 14 }, // Shift
+      { width: 14 }, // Distance
+      { width: 14 }, // Role
+      { width: 14 }, // Work Status
+      { width: 14 }, // Suspicious
+    ];
 
     const borderThin = {
       top: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
@@ -244,23 +313,23 @@ export default function ReportsPage() {
     };
 
     const r1 = ws.addRow([`Attendance Report (${from} to ${to})`]);
-    ws.mergeCells(1, 1, 1, 12);
+    ws.mergeCells(1, 1, 1, 11);
     r1.font = { bold: true, size: 14, color: { argb: 'FFFFFF' } };
     r1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
     r1.alignment = { vertical: 'middle', horizontal: 'left' };
     r1.height = 32;
 
     const r2 = ws.addRow([`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`]);
-    ws.mergeCells(2, 1, 2, 12);
+    ws.mergeCells(2, 1, 2, 11);
     r2.font = { size: 11, italic: true, color: { argb: '6B7280' } };
     r2.height = 22;
 
     ws.addRow([]);
 
-     const headerRow = ws.addRow([
-        'Employee', 'Date', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur',
-        'Status', 'Shift', 'Distance', 'Role', 'Work Status', 'Suspicious',
-      ]);
+    const headerRow = ws.addRow([
+      'Employee', 'Check-in', 'Check-out', 'Jam Kerja', 'Lembur',
+      'Status', 'Shift', 'Distance', 'Role', 'Work Status', 'Suspicious',
+    ]);
     headerRow.font = { bold: true, color: { argb: 'FFFFFF' }, size: 11 };
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
     headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -274,48 +343,66 @@ export default function ReportsPage() {
       };
     });
 
-    for (const r of filteredRecords) {
-      const statusColor: Record<string, { bg: string; fg: string }> = {
-        present: { bg: 'DCFCE7', fg: '166534' },
-        late: { bg: 'FFEDD5', fg: '9A3412' },
-        outside_radius: { bg: 'DBEAFE', fg: '1E40AF' },
-      };
-      const colors = statusColor[r.status] || { bg: 'F3F4F6', fg: '374151' };
+    // Group records by date for XLSX export
+    const grouped: Record<string, any[]> = {};
+    filteredRecords.forEach((r: any) => {
+      const dateKey = formatWIBDate(r.check_in_time);
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(r);
+    });
 
-      const row = ws.addRow([
-        r.profiles?.full_name || '',
-        formatWIBDateDisplay(r.check_in_time),
-        formatWIBTime(r.check_in_time),
-        r.check_out_time ? formatWIBTime(r.check_out_time) : '',
-        formatDuration(r.work_duration_minutes ?? null),
-        formatDuration(r.overtime_minutes ?? null),
-        statusDisplay[r.status] || r.status,
-        getShiftLabel(r.shift_type),
-        formatDistance(r.distance_from_office || 0),
-        (r.profiles?.role || '').replace(/_/g, ' '),
-        r.work_status ?? '-',
-        r.is_mocked ? 'YES' : 'NO',
-      ]);
-
-      row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.bg } };
-      row.getCell(7).font = { color: { argb: colors.fg } };
-      row.getCell(12).font = r.is_mocked ? { color: { argb: 'DC2626' }, bold: true } : {};
-
-      row.eachCell((cell, colIdx) => {
-        if (colIdx !== 7 && colIdx !== 12) {
-          cell.border = borderThin;
-        } else {
-          cell.border = borderThin;
-        }
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    Object.keys(grouped).sort((a, b) => b.localeCompare(a)).forEach((dateKey) => {
+      // 1. Add date group header row
+      const dateHeaderRow = ws.addRow([formatWIBDateHeader(dateKey)]);
+      ws.mergeCells(dateHeaderRow.number, 1, dateHeaderRow.number, 11);
+      dateHeaderRow.font = { bold: true, size: 11, color: { argb: '1D4ED8' } };
+      dateHeaderRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EFF6FF' } };
+      dateHeaderRow.alignment = { vertical: 'middle', horizontal: 'left' };
+      dateHeaderRow.height = 26;
+      
+      dateHeaderRow.eachCell((cell) => {
+        cell.border = borderThin;
       });
 
-      row.height = 20;
-    }
+      // 2. Add employee rows
+      grouped[dateKey].forEach((r: any) => {
+        const statusColor: Record<string, { bg: string; fg: string }> = {
+          present: { bg: 'DCFCE7', fg: '166534' },
+          late: { bg: 'FFEDD5', fg: '9A3412' },
+          outside_radius: { bg: 'DBEAFE', fg: '1E40AF' },
+        };
+        const colors = statusColor[r.status] || { bg: 'F3F4F6', fg: '374151' };
+
+        const row = ws.addRow([
+          r.profiles?.full_name || '',
+          formatWIBTime(r.check_in_time),
+          r.check_out_time ? formatWIBTime(r.check_out_time) : '',
+          formatDuration(r.work_duration_minutes ?? null),
+          formatDuration(r.overtime_minutes ?? null),
+          statusDisplay[r.status] || r.status,
+          getShiftLabel(r.shift_type),
+          formatDistance(r.distance_from_office || 0),
+          (r.profiles?.role || '').replace(/_/g, ' '),
+          r.work_status ?? '-',
+          r.is_mocked ? 'YES' : 'NO',
+        ]);
+
+        row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.bg } };
+        row.getCell(6).font = { color: { argb: colors.fg } };
+        row.getCell(11).font = r.is_mocked ? { color: { argb: 'DC2626' }, bold: true } : {};
+
+        row.eachCell((cell) => {
+          cell.border = borderThin;
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+
+        row.height = 20;
+      });
+    });
 
     ws.addRow([]);
     const sr = ws.addRow([`Total: ${filteredRecords.length} records`]);
-    ws.mergeCells(sr.number, 1, sr.number, 12);
+    ws.mergeCells(sr.number, 1, sr.number, 11);
     sr.font = { italic: true, size: 10, color: { argb: '6B7280' } };
 
     const buffer = await wb.xlsx.writeBuffer();
@@ -597,16 +684,112 @@ export default function ReportsPage() {
         <StatsCard icon={<Timer className="w-5 h-5" />} value={formatDuration(stats.totalOvertime)} label="Total Lembur" color="orange" />
       </div>
 
-      {/* Table with Sort Handler */}
-      <Table
-        columns={columns}
-        data={filteredRecords}
-        loading={loading}
-        emptyText="No attendance records found for the selected filters"
-        sortKey={sortKey}
-        sortDir={sortDir}
-        onSort={handleSort}
-      />
+      {/* Expand/Collapse All Controls */}
+      {!loading && Object.keys(groupedByDate).length > 0 && (
+        <div className="flex justify-end gap-2 text-xs">
+          <Button variant="ghost" size="sm" onClick={handleExpandAll} className="h-8">
+            Expand All
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleCollapseAll} className="h-8">
+            Collapse All
+          </Button>
+        </div>
+      )}
+
+      {/* Grouped Day Cards */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20 bg-white rounded-xl border">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      ) : Object.keys(groupedByDate).length === 0 ? (
+        <div className="bg-white rounded-xl border p-12 text-center text-gray-500">
+          No attendance records found for the selected filters
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {Object.keys(groupedByDate).map((dateKey) => {
+            const dayRecords = groupedByDate[dateKey];
+            const isExpanded = !!expandedDates[dateKey];
+            
+            // Calculate stats for this day
+            const dayStats = dayRecords.reduce((acc, r) => {
+              acc.total++;
+              if (r.status === 'present') acc.present++;
+              if (r.status === 'late') acc.late++;
+              if (r.status === 'outside_radius') acc.outside++;
+              if (r.is_mocked) acc.suspicious++;
+              return acc;
+            }, { total: 0, present: 0, late: 0, outside: 0, suspicious: 0 });
+
+            // Columns without redundant Date column
+            const cardColumns = columns.filter((col) => col.key !== 'date');
+
+            return (
+              <div key={dateKey} className="bg-white rounded-xl border shadow-sm overflow-hidden transition-all duration-200">
+                {/* Header */}
+                <button
+                  onClick={() => setExpandedDates(prev => ({ ...prev, [dateKey]: !prev[dateKey] }))}
+                  className="w-full px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-gray-800 text-lg">
+                      {formatWIBDateHeader(dayRecords[0].check_in_time)}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border">
+                        {dayStats.total} Total
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100">
+                        {dayStats.present} Hadir
+                      </span>
+                      {dayStats.late > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-50 text-yellow-700 border border-yellow-100">
+                          {dayStats.late} Terlambat
+                        </span>
+                      )}
+                      {dayStats.outside > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                          {dayStats.outside} Luar Radius
+                        </span>
+                      )}
+                      {dayStats.suspicious > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100">
+                          {dayStats.suspicious} Kejanggalan
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 ml-auto sm:ml-0">
+                    <span className="text-xs text-gray-400 font-medium">
+                      {isExpanded ? 'Tutup Detail' : 'Lihat Detail'}
+                    </span>
+                    {isExpanded ? (
+                      <ChevronUp className="w-5 h-5 text-gray-500" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-gray-500" />
+                    )}
+                  </div>
+                </button>
+
+                {/* Body (Table) */}
+                {isExpanded && (
+                  <div className="border-t">
+                    <Table
+                      columns={cardColumns}
+                      data={dayRecords}
+                      loading={false}
+                      emptyText="Tidak ada data untuk tanggal ini"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Pagination */}
       <Pagination

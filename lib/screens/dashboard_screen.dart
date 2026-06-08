@@ -35,6 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _isProcessing = false;
   Map<String, dynamic>? _todayAttendance;
+  bool _hasCheckedOutToday = false;
   int? _localAttendanceId;
   bool _isLocationReady = false;
   bool _isLocationServiceEnabled = true;
@@ -334,7 +335,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         debugPrint('[Attendance] hasCheckout=$hasCheckout, check_out_time=${synced['check_out_time']}');
         if (mounted) {
           setState(() {
-            _todayAttendance = hasCheckout ? null : synced;
+            _todayAttendance = synced;
+            _hasCheckedOutToday = hasCheckout;
             _localAttendanceId = null;
           });
         }
@@ -351,7 +353,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         debugPrint('[Attendance] Local hasCheckout=$hasCheckout, check_out_time=${firstRecord['check_out_time']}');
         if (mounted) {
           setState(() {
-            _todayAttendance = hasCheckout ? null : firstRecord;
+            _todayAttendance = firstRecord;
+            _hasCheckedOutToday = hasCheckout;
             _localAttendanceId = hasCheckout ? null : (firstRecord['local_id'] as int?);
           });
         }
@@ -359,6 +362,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) {
           setState(() {
             _todayAttendance = null;
+            _hasCheckedOutToday = false;
             _localAttendanceId = null;
           });
         }
@@ -460,7 +464,7 @@ if (currentCoords != null && currentCoords.latitude == 0 && currentCoords.longit
 }
 
 try {
-  if (_todayAttendance != null) {
+  if (_todayAttendance != null && !_hasCheckedOutToday) {
     // CHECK-OUT
     if (syncService.isOnline) {
       if (_localAttendanceId != null) {
@@ -492,6 +496,21 @@ try {
         );
       }
     }
+    if (mounted) {
+      setState(() => _hasCheckedOutToday = true);
+    }
+  } else if (_todayAttendance != null && _hasCheckedOutToday) {
+    // Already checked in and checked out today - no more actions allowed
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Anda sudah melakukan absensi hari ini.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+    return;
   } else {
      // CHECK-IN
      // --- Select work status ---
@@ -531,6 +550,8 @@ try {
           'check_in_time': now.toUtc().toIso8601String(),
           'check_in_latitude': currentCoords?.latitude,
           'check_in_longitude': currentCoords?.longitude,
+          'check_in_accuracy': currentCoords.accuracy,
+          'check_in_location_data': locationService.buildLocationData(),
           'is_mocked': locationService.isMocked,
           'distance_from_office': locationService.currentDistance,
           'office_id': officeId,
@@ -543,6 +564,7 @@ try {
         if (inserted != null && mounted) {
           setState(() {
             _todayAttendance = inserted;
+            _hasCheckedOutToday = false;
             _localAttendanceId = null;
           });
           await _showCheckInResultDialog(inserted['status']);
@@ -554,10 +576,13 @@ try {
               'check_in_time': now.toUtc().toIso8601String(),
               'check_in_latitude': currentCoords?.latitude,
               'check_in_longitude': currentCoords?.longitude,
+              'check_in_accuracy': currentCoords?.accuracy,
+              'check_in_location_data': locationService.buildLocationData(),
               'is_mocked': locationService.isMocked,
               'distance_from_office': locationService.currentDistance,
               'work_status': workStatus ?? 'WFO',
             };
+            _hasCheckedOutToday = false;
             _localAttendanceId = null;
           });
           if (context.mounted) {
@@ -581,6 +606,7 @@ try {
           photoUrl: photoUrl,
           localPhotoPath: localPhotoPath,
           workStatus: workStatus ?? 'WFO',
+          locationData: locationService.buildLocationData(),
         );
         if (saved && mounted) {
           setState(() {
@@ -589,10 +615,13 @@ try {
               'check_in_time': now.toUtc().toIso8601String(),
               'check_in_latitude': currentCoords?.latitude,
               'check_in_longitude': currentCoords?.longitude,
+              'check_in_accuracy': currentCoords?.accuracy,
+              'check_in_location_data': locationService.buildLocationData(),
               'is_mocked': locationService.isMocked,
               'distance_from_office': locationService.currentDistance,
               'work_status': workStatus ?? 'WFO',
             };
+            _hasCheckedOutToday = false;
             _localAttendanceId = null;
           });
         }
@@ -687,7 +716,7 @@ try {
             ),
             const SizedBox(height: 8),
             Text(
-              'Waktu: ${DateTime.now().toString().substring(11, 16)}',
+              'Waktu: ${_nowWIB().toString().substring(11, 16)} WIB',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
@@ -759,7 +788,7 @@ try {
             ),
             const SizedBox(height: 8),
             Text(
-              'Waktu: ${DateTime.now().toString().substring(11, 16)}',
+              'Waktu: ${_nowWIB().toString().substring(11, 16)} WIB',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
@@ -904,6 +933,7 @@ try {
     final role = authService.profile?['role'] ?? '';
     final isDriver = role == 'driver_bebas';
     final hasLocation = locationService.currentLocation != null || locationService.lastGpsPosition != null || isDriver;
+    final isWaitingForLocation = _isLocationServiceEnabled && !locationService.permissionDenied && !hasLocation && !locationService.isMocked;
     // Drivers can attend from anywhere (no radius check needed)
     final canAttend = _isLocationServiceEnabled && hasLocation && (locationService.isInRadius || isDriver) && !locationService.isMocked;
 
@@ -1246,24 +1276,48 @@ try {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      onPressed: (_isProcessing || !canAttend)
+                      onPressed: (_isProcessing || !canAttend || (_todayAttendance != null && _hasCheckedOutToday))
                           ? null
                           : _handleAttendance,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _todayAttendance != null
-                            ? Colors.orange
-                            : const Color(0xFF005494),
+                        backgroundColor: _todayAttendance != null && _hasCheckedOutToday
+                            ? Colors.grey
+                            : _todayAttendance != null
+                                ? Colors.orange
+                                : const Color(0xFF005494),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: _isProcessing
                           ? const CircularProgressIndicator(color: Colors.white)
-                          : Text(
-                              _todayAttendance != null
-                                  ? 'CHECK-OUT SEKARANG'
-                                  : 'CHECK-IN SEKARANG',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
+                          : isWaitingForLocation
+                              ? const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      width: 18, height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white70,
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'MEMBACA LOKASI...',
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                )
+                              : _todayAttendance != null && _hasCheckedOutToday
+                                  ? const Text(
+                                      'SUDAH ABSEN HARI INI',
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                    )
+                                  : Text(
+                                      _todayAttendance != null
+                                          ? 'CHECK-OUT SEKARANG'
+                                          : 'CHECK-IN SEKARANG',
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    ),
                     ),
                   ),
                 ],

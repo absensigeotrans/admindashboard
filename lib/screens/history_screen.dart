@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/report_service.dart';
+import '../utils/timezone_utils.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -27,8 +28,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         .map((a) {
           final raw = a['check_in_time'] as String?;
           if (raw == null) return null;
-          final dt = DateTime.parse(raw);
-          return DateTime(dt.year, dt.month, dt.day);
+          final wib = dateFromUtcToWIB(raw);
+          return DateTime(wib.year, wib.month, wib.day);
         })
         .whereType<DateTime>()
         .toSet();
@@ -125,42 +126,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   String _formatDate(String? dateStr) {
-    if (dateStr == null) return '-';
-    try {
-      final date = DateTime.parse(dateStr);
-      return DateFormat('dd MMM yyyy').format(date);
-    } catch (e) {
-      return dateStr;
-    }
+    return formatDateWIB(dateStr);
   }
 
   String _formatTime(String? timeStr) {
-    if (timeStr == null) return '-';
-    try {
-      final date = DateTime.parse(timeStr);
-      return DateFormat('HH:mm').format(date);
-    } catch (e) {
-      return timeStr;
-    }
+    return formatWIB(timeStr);
   }
 
   Duration? _calculateWorkDuration(String? checkIn, String? checkOut) {
     if (checkIn == null || checkOut == null) return null;
     try {
-      final inTime = DateTime.parse(checkIn);
-      final outTime = DateTime.parse(checkOut);
+      final inTime = dateFromUtcToWIB(checkIn);
+      final outTime = dateFromUtcToWIB(checkOut);
       return outTime.difference(inTime);
     } catch (e) {
       return null;
     }
   }
 
-  String _formatDuration(Duration? duration) {
-    if (duration == null) return '-';
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    return '${hours}j ${minutes}m';
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -337,7 +321,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           for (final item in _attendanceList) {
             allItems.add(_ListItem(
               type: 'attendance',
-              date: DateTime.parse(item['check_in_time'] as String),
+              date: dateFromUtcToWIB(item['check_in_time'] as String),
               data: item,
             ));
           }

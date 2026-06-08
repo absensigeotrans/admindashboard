@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 import 'dart:math' as math;
 import 'notification_service.dart';
 
@@ -54,7 +53,9 @@ class LocationService extends ChangeNotifier {
     // Configure background geolocation
     bg.BackgroundGeolocation.onLocation((bg.Location location) {
       _currentLocation = location;
-      _isMocked = location.mock ?? false;
+      // [FIX] location.mock adalah non-nullable bool di versi library ini,
+      // tidak perlu null-aware operator ??
+      _isMocked = location.mock;
       
       if (_isMocked && !_wasMocked) {
         NotificationService().showMockLocationAlert();
@@ -113,8 +114,13 @@ class LocationService extends ChangeNotifier {
         return;
       }
 
+      // [FIX] Menggunakan locationSettings (API baru) menggantikan
+      // desiredAccuracy yang sudah deprecated sejak geolocator v10+
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
       );
 
       _permissionDenied = false;
@@ -152,17 +158,36 @@ class LocationService extends ChangeNotifier {
     // Check native isMocked flag
     if (position.isMocked) return true;
 
-    // Check for suspiciously perfect accuracy (common in fake GPS apps)
-    if (position.accuracy != null && position.accuracy! < 1.0) {
-      // Very high accuracy (< 1 meter) could indicate spoofing
-      debugPrint('[LocationService] Suspicious accuracy: ${position.accuracy}');
+    // Suspiciously perfect accuracy (< 1 meter) — fake GPS often reports 0.0
+    if (position.accuracy < 1.0) {
+      debugPrint('[LocationService] Flagged mocked: accuracy=${position.accuracy} (< 1.0)');
+      return true;
     }
 
-    // Check if altitude is 0 (common default in mock locations)
-    // Only flag if other indicators are present
-    // Note: We don't block based on altitude alone as real GPS can also show 0
+    if (position.accuracy < 5.0 && position.altitude == 0) {
+      debugPrint('[LocationService] Flagged mocked: accuracy=${position.accuracy}, altitude=0');
+      return true;
+    }
 
     return false;
+  }
+
+  /// Build JSON location data for check-in payload
+  Map<String, dynamic>? buildLocationData() {
+    final pos = _lastGpsPosition;
+    if (pos == null) return null;
+
+    return {
+      'latitude': pos.latitude,
+      'longitude': pos.longitude,
+      'accuracy': pos.accuracy,
+      'altitude': pos.altitude,
+      'speed': pos.speed,
+      'speed_accuracy': pos.speedAccuracy,
+      'heading': pos.heading,
+      'is_mocked': pos.isMocked,
+      'timestamp': pos.timestamp.toIso8601String(),
+    };
   }
 
   Future<bool> isServiceEnabled() async {

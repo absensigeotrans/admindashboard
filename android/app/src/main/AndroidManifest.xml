@@ -11,7 +11,7 @@
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
 
     <application
-        android:label="geo_attend_ptk"
+        android:label="GeoTrans"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

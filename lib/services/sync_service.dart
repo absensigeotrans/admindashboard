@@ -97,21 +97,25 @@ class SyncService extends ChangeNotifier {
      bool isMocked = false,
      String? photoUrl,
      String? localPhotoPath,
-     String? workStatus, // WFH, WFO, DINAS, Lainnya
+     String? workStatus,
+     Map<String, dynamic>? locationData,
    }) async {
     try {
+      final checkInAccuracy = locationData?['accuracy'] as double?;
        await _db.insertPendingAttendance({
          'user_id': userId,
          'check_in_time': checkInTime.toIso8601String(),
          'check_in_latitude': checkInLatitude,
          'check_in_longitude': checkInLongitude,
+         'check_in_accuracy': checkInAccuracy,
+         'check_in_location_data': locationData,
          'is_mocked': isMocked ? 1 : 0,
          'distance_from_office': checkInDistance ?? 0,
-         if (photoUrl != null) 'photo_url': photoUrl,
-         if (localPhotoPath != null) 'local_photo_path': localPhotoPath,
+         'photo_url': ?photoUrl,
+         'local_photo_path': ?localPhotoPath,
          'sync_status': 'pending',
          'created_at': DateTime.now().toIso8601String(),
-         if (workStatus != null) 'work_status': workStatus,
+         'work_status': ?workStatus,
        });
 
       await _updatePendingCount();
@@ -231,7 +235,7 @@ class SyncService extends ChangeNotifier {
                  'check_out_time': item['check_out_time'],
                  'check_out_latitude': item['check_out_latitude'],
                  'check_out_longitude': item['check_out_longitude'],
-                 if (photoUrl != null) 'photo_url': photoUrl,
+                 'photo_url': ?photoUrl,
                  if (item['work_status'] != null) 'work_status': item['work_status'],
                }).eq('id', existing['id']);
              }
@@ -242,12 +246,14 @@ class SyncService extends ChangeNotifier {
                'check_in_time': item['check_in_time'],
                'check_in_latitude': item['check_in_latitude'],
                'check_in_longitude': item['check_in_longitude'],
+               'check_in_accuracy': item['check_in_accuracy'],
+               'check_in_location_data': item['check_in_location_data'],
                'check_out_time': checkOutTime,
                'check_out_latitude': checkOutTime != null ? item['check_out_latitude'] : null,
                'check_out_longitude': checkOutTime != null ? item['check_out_longitude'] : null,
                'is_mocked': item['is_mocked'] == 1,
                'distance_from_office': item['distance_from_office'],
-               if (photoUrl != null) 'photo_url': photoUrl,
+               'photo_url': ?photoUrl,
                if (item['work_status'] != null) 'work_status': item['work_status'],
              });
           }

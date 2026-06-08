@@ -95,7 +95,7 @@ class _SelfieCameraOverlayState extends State<SelfieCameraOverlay>
       if (mounted) {
         setState(() {
           _isProcessing = false;
-          _errorMessage = '${e.toString()}';
+          _errorMessage = e.toString();
         });
       }
     }

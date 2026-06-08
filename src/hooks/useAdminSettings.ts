@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export interface AdminSettings {
@@ -26,21 +26,24 @@ const defaults: AdminSettings = {
 };
 
 export function useAdminSettings() {
-  const [settings, setSettings] = useState<AdminSettings>(defaults);
+  // [FIX] Gunakan lazy initializer di useState untuk membaca localStorage.
+  // Ini lebih benar daripada useEffect karena berjalan sekali saat mount
+  // tanpa memicu render tambahan dan tanpa melanggar aturan ESLint.
+  const [settings, setSettings] = useState<AdminSettings>(() => {
+    try {
+      const stored = typeof window !== 'undefined'
+        ? localStorage.getItem(STORAGE_KEY)
+        : null;
+      if (stored) {
+        return { ...defaults, ...JSON.parse(stored) };
+      }
+    } catch {
+      // Fallback to defaults jika JSON tidak valid
+    }
+    return defaults;
+  });
   const [loading, setLoading] = useState(false);
   const [synced, setSynced] = useState(false); // false = only in localStorage
-
-  // Load from localStorage on init
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        setSettings({ ...defaults, ...JSON.parse(stored) });
-      } catch {
-        setSettings(defaults);
-      }
-    }
-  }, []);
 
   // Try to load from DB settings table
   const syncFromDB = useCallback(async () => {

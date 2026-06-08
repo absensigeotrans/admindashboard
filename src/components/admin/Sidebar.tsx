@@ -23,6 +23,7 @@ import {
   CheckCircle,
   Clock,
   AlertTriangle,
+  ShieldAlert,
   LogOut,
   Image,
 } from 'lucide-react';
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/admin/attendance-rate', icon: BarChart3, label: 'Attendance Rate' },
   { href: '/admin/leave-requests', icon: CalendarX, label: 'Leave Requests', badgeKey: 'pendingLeaves' },
   { href: '/admin/monitoring', icon: Radio, label: 'Live Monitoring' },
+  { href: '/admin/anomalies', icon: ShieldAlert, label: 'Anomali', badgeKey: 'anomalies' },
   { href: '/admin/photos', icon: Image, label: 'Photos' },
   { href: '/admin/activity-logs', icon: Activity, label: 'Activity Logs' },
   { href: '/admin/settings', icon: Settings, label: 'Settings' },
@@ -47,6 +49,7 @@ interface SidebarStats {
   outside: number;
   suspicious: number;
   pendingLeaves: number;
+  anomalies: number;
 }
 
 interface SidebarProps {
@@ -59,7 +62,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { signOut } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [stats, setStats] = useState<SidebarStats>({ present: 0, late: 0, outside: 0, suspicious: 0, pendingLeaves: 0 });
+  const [stats, setStats] = useState<SidebarStats>({ present: 0, late: 0, outside: 0, suspicious: 0, pendingLeaves: 0, anomalies: 0 });
   const [loading, setLoading] = useState(true);
 
   // Update time every minute
@@ -88,6 +91,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           .select('*', { count: 'exact', head: true })
           .eq('status', 'pending');
 
+        // Fetch anomaly count
+        const { count: anomalyCount } = await supabase
+          .from('attendance')
+          .select('*', { count: 'exact', head: true })
+          .or('is_mocked.eq.true,anomaly_flags.neq.{}');
+
         if (attendanceData) {
           const present = attendanceData.filter((r) => r.status === 'present').length;
           const late = attendanceData.filter((r) => r.status === 'late').length;
@@ -100,9 +109,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             outside,
             suspicious,
             pendingLeaves: pendingLeaves || 0,
+            anomalies: anomalyCount || 0,
           });
         } else {
-          setStats((prev) => ({ ...prev, pendingLeaves: pendingLeaves || 0 }));
+          setStats((prev) => ({ ...prev, pendingLeaves: pendingLeaves || 0, anomalies: anomalyCount || 0 }));
         }
       } catch (err) {
         console.error('Error fetching sidebar stats:', err);

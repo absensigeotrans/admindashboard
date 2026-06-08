@@ -91,7 +91,7 @@ export default function EmployeesPage() {
       ...editEmployee,
       full_name: editFullName,
       role: editRole,
-      shift_type: (editShift || null) as 'morning' | 'afternoon' | null,
+      shift_type: editShift || null,
     };
 
     // Update state immediately
@@ -213,7 +213,7 @@ export default function EmployeesPage() {
     const headers = ['Name', 'Email', 'Role', 'Shift', 'Status', 'Created'];
     const rows = employees.map((e) => [
       e.full_name, e.email, e.role, 
-      e.shift_type === 'morning' ? 'Pagi' : e.shift_type === 'afternoon' ? 'Siang' : 'Full Time',
+      e.shift_type === 'morning' ? 'Pagi' : e.shift_type === 'afternoon' ? 'Siang' : e.shift_type === 'full_time' ? 'Full Time' : e.shift_type === 'non_shifting' ? 'Non-Shifting' : '—',
       'active', e.created_at,
     ]);
     const csv = [headers, ...rows]
@@ -319,11 +319,15 @@ export default function EmployeesPage() {
                           ? 'bg-blue-100 text-blue-700'
                           : emp.shift_type === 'afternoon'
                           ? 'bg-orange-100 text-orange-700'
+                          : emp.shift_type === 'full_time'
+                          ? 'bg-purple-100 text-purple-700'
                           : 'bg-gray-100 text-gray-500'
                       }`}>
                         {emp.shift_type === 'morning' ? 'Pagi' :
                          emp.shift_type === 'afternoon' ? 'Siang' :
-                         'Full Time'}
+                         emp.shift_type === 'full_time' ? 'Full Time' :
+                         emp.shift_type === 'non_shifting' ? 'Non-Shifting' :
+                         '—'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -378,7 +382,9 @@ export default function EmployeesPage() {
               value={editShift}
               onChange={(e) => setEditShift(e.target.value as ShiftType | '')}
               options={[
-                { value: '', label: 'Full Time (07:00-16:00)' },
+                { value: '', label: '—' },
+                { value: 'non_shifting', label: 'Non-Shifting' },
+                { value: 'full_time', label: 'Full Time (07:00-16:00)' },
                 { value: 'morning', label: 'Pagi (06:00-14:00)' },
                 { value: 'afternoon', label: 'Siang (10:00-18:00)' },
               ]}
@@ -431,7 +437,9 @@ export default function EmployeesPage() {
                 <p className="font-medium">
                   {detailEmployee.shift_type === 'morning' ? 'Pagi (06:00-14:00)' :
                    detailEmployee.shift_type === 'afternoon' ? 'Siang (10:00-18:00)' :
-                   'Full Time (07:00-16:00)'}
+                   detailEmployee.shift_type === 'full_time' ? 'Full Time (07:00-16:00)' :
+                   detailEmployee.shift_type === 'non_shifting' ? 'Non-Shifting' :
+                   '—'}
                 </p>
               </div>
               <div>
@@ -519,7 +527,9 @@ export default function EmployeesPage() {
             value={addShift}
             onChange={(e) => setAddShift(e.target.value as ShiftType | '')}
             options={[
-              { value: '', label: 'Full Time (07:00-16:00)' },
+              { value: '', label: '—' },
+              { value: 'non_shifting', label: 'Non-Shifting' },
+              { value: 'full_time', label: 'Full Time (07:00-16:00)' },
               { value: 'morning', label: 'Pagi (06:00-14:00)' },
               { value: 'afternoon', label: 'Siang (10:00-18:00)' },
             ]}
