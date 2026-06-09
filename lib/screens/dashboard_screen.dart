@@ -412,7 +412,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         await _showShiftSelectionDialog(user.id);
         // After selection, check again
         final stillNoShift = await _checkJuruParkirShift(user.id);
-        if (stillNoShift) {
+        if (!stillNoShift) {
           // User didn't select shift, cancel check-in
           setState(() => _isProcessing = false);
           return;
