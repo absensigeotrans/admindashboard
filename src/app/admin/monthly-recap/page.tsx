@@ -5,8 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { StatsCard } from '@/components/ui/StatsCard';
 import { Button } from '@/components/ui/Button';
 import { toast } from '@/components/ui/Toast';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import {
   ChevronDown,
   ChevronRight,
@@ -501,46 +499,56 @@ export default function MonthlyRecapPage() {
     toast.success(`CSV berhasil di-export (${employees.length} karyawan)`);
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF('landscape');
-    const title = `Rekap Bulanan - ${monthLabel}`;
-    doc.setFontSize(16);
-    doc.text(title, 14, 16);
-    doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`, 14, 23);
-    doc.text(`Karyawan: ${employees.length} | Hadir: ${totalPresent} | Terlambat: ${totalLate} | Absen: ${totalAbsent} | Rata-rata: ${avgRate}%`, 14, 30);
+  const exportPDF = async () => {
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
 
-    const dayHeaders = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
-    const headers = [['Nama', ...dayHeaders, 'Hadir', 'Telat', 'Absen']];
-    const rows = employeeDynamics.map((emp) => [
-      emp.name,
-      ...emp.days.map((d) => {
-        const p = pendingChanges[emp.id]?.[d.day];
-        const st = p !== undefined ? p : d.status;
-        switch (st) {
-          case 'present': return '●';
-          case 'late': return '●';
-          case 'outside_radius': return '●';
-          case 'absent': return 'A';
-          default: return '';
-        }
-      }),
-      emp.present,
-      emp.late,
-      emp.absent,
-    ]);
+      const doc = new jsPDF('landscape');
+      const title = `Rekap Bulanan - ${monthLabel}`;
+      doc.setFontSize(16);
+      doc.text(title, 14, 16);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`, 14, 23);
+      doc.text(`Karyawan: ${employees.length} | Hadir: ${totalPresent} | Terlambat: ${totalLate} | Absen: ${totalAbsent} | Rata-rata: ${avgRate}%`, 14, 30);
 
-    autoTable(doc, {
-      head: headers,
-      body: rows,
-      startY: 36,
-      styles: { fontSize: 7 },
-      headStyles: { fillColor: [37, 99, 235] },
-      alternateRowStyles: { fillColor: [245, 247, 250] },
-    });
+      const dayHeaders = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+      const headers = [['Nama', ...dayHeaders, 'Hadir', 'Telat', 'Absen']];
+      const rows = employeeDynamics.map((emp) => [
+        emp.name,
+        ...emp.days.map((d) => {
+          const p = pendingChanges[emp.id]?.[d.day];
+          const st = p !== undefined ? p : d.status;
+          switch (st) {
+            case 'present': return '●';
+            case 'late': return '●';
+            case 'outside_radius': return '●';
+            case 'absent': return 'A';
+            default: return '';
+          }
+        }),
+        emp.present,
+        emp.late,
+        emp.absent,
+      ]);
 
-    doc.save(`rekap_bulanan_${monthLabel.replace(' ', '_')}.pdf`);
-    toast.success(`PDF berhasil di-export (${employees.length} karyawan)`);
+      autoTable(doc, {
+        head: headers,
+        body: rows,
+        startY: 36,
+        styles: { fontSize: 7 },
+        headStyles: { fillColor: [37, 99, 235] },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+      });
+
+      doc.save(`rekap_bulanan_${monthLabel.replace(' ', '_')}.pdf`);
+      toast.success(`PDF berhasil di-export (${employees.length} karyawan)`);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+      toast.error('Failed to export PDF');
+    }
   };
 
   async function exportEmployeeXLSX(

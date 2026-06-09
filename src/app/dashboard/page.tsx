@@ -83,8 +83,8 @@ export default function ViewerDashboard() {
       fetchHistory(100),
       fetchOffices(),
       fetchEmployees(1, 10),
+      fetchDashboardData(30),
     ]);
-    await fetchDashboardData(30);
     setRefreshing(false);
     setLoading(false);
   }, [fetchHistory, fetchOffices, fetchEmployees, fetchDashboardData]);

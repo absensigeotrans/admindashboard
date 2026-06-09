@@ -15,8 +15,6 @@ import { Attendance, AttendanceStatus, ShiftType } from '@/types';
 import { format } from 'date-fns';
 import { getWIBDaysAgo, getWIBDate, formatWIBTime, formatWIBTimeWithSeconds, formatWIBDateDisplay } from '@/lib/timezone';
 import { formatDistance } from '@/lib/utils';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { Download, FileText, CheckCircle, Clock, XCircle, FileDown, AlertTriangle, Sun, Sunset } from 'lucide-react';
 
 const PAGE_SIZE = 50;
@@ -136,39 +134,52 @@ export default function ViewerReportsPage() {
     toast.success(`Exported ${filteredRecords.length} records`);
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF('landscape');
-    const title = `Attendance Report (${from} to ${to})`;
-    doc.setFontSize(16);
-    doc.text(title, 14, 16);
-    doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`, 14, 23);
-    doc.text(`Total: ${stats.total} | Present: ${stats.present} | Late: ${stats.late} | Outside: ${stats.outside} | Avg: ${formatDistance(stats.avgDistance)}`, 14, 30);
+  const exportPDF = async () => {
+    setExportLoading(true);
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
 
-    const headers = [['Employee', 'Date', 'Check-in', 'Check-out', 'Status', 'Shift', 'Distance', 'Coordinates', 'Suspicious']];
-    const rows = filteredRecords.map((r: any) => [
-      r.profiles?.full_name || '—',
-      formatWIBDateDisplay(r.check_in_time),
-      formatWIBTime(r.check_in_time),
-      r.check_out_time ? formatWIBTime(r.check_out_time) : '—',
-      r.status.replace('_', ' '),
-      getShiftLabel(r.shift_type),
-      formatDistance(r.distance_from_office || 0),
-      `${r.check_in_latitude?.toFixed(4) || '-'}, ${r.check_in_longitude?.toFixed(4) || '-'}`,
-      r.is_mocked ? 'YES' : 'NO',
-    ]);
+      const doc = new jsPDF('landscape');
+      const title = `Attendance Report (${from} to ${to})`;
+      doc.setFontSize(16);
+      doc.text(title, 14, 16);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`, 14, 23);
+      doc.text(`Total: ${stats.total} | Present: ${stats.present} | Late: ${stats.late} | Outside: ${stats.outside} | Avg: ${formatDistance(stats.avgDistance)}`, 14, 30);
 
-    autoTable(doc, {
-      head: headers,
-      body: rows,
-      startY: 36,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [37, 99, 235] },
-      alternateRowStyles: { fillColor: [245, 247, 250] },
-    });
+      const headers = [['Employee', 'Date', 'Check-in', 'Check-out', 'Status', 'Shift', 'Distance', 'Coordinates', 'Suspicious']];
+      const rows = filteredRecords.map((r: any) => [
+        r.profiles?.full_name || '—',
+        formatWIBDateDisplay(r.check_in_time),
+        formatWIBTime(r.check_in_time),
+        r.check_out_time ? formatWIBTime(r.check_out_time) : '—',
+        r.status.replace('_', ' '),
+        getShiftLabel(r.shift_type),
+        formatDistance(r.distance_from_office || 0),
+        `${r.check_in_latitude?.toFixed(4) || '-'}, ${r.check_in_longitude?.toFixed(4) || '-'}`,
+        r.is_mocked ? 'YES' : 'NO',
+      ]);
 
-    doc.save(`attendance_report_${from}_to_${to}.pdf`);
-    toast.success(`Exported ${filteredRecords.length} records`);
+      autoTable(doc, {
+        head: headers,
+        body: rows,
+        startY: 36,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [37, 99, 235] },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+      });
+
+      doc.save(`attendance_report_${from}_to_${to}.pdf`);
+      toast.success(`Exported ${filteredRecords.length} records`);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+      toast.error('Failed to export PDF');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const columns = [
