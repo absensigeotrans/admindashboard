@@ -53,3 +53,7 @@ app.*.map.json
 # Android (Flutter)
 android/.kotlin/
 *.salive
+
+# IDE
+.gemini/
+
