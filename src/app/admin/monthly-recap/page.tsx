@@ -771,19 +771,19 @@ export default function MonthlyRecapPage() {
           <select
             value={month}
             onChange={(e) => setMonth(Number(e.target.value))}
-            className="px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {MONTHS.map((label, idx) => (
-              <option key={idx} value={idx}>{label}</option>
+              <option key={idx} value={idx} className="text-gray-900 bg-white">{label}</option>
             ))}
           </select>
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {years.map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option key={y} value={y} className="text-gray-900 bg-white">{y}</option>
             ))}
           </select>
         </div>
@@ -1024,11 +1024,11 @@ export default function MonthlyRecapPage() {
                     <select
                       value={exceptionUserId}
                       onChange={(e) => setExceptionUserId(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="">Pilih karyawan...</option>
+                      <option value="" className="text-gray-900 bg-white">Pilih karyawan...</option>
                       {profilesList.map((p) => (
-                        <option key={p.id} value={p.id}>{p.full_name}</option>
+                        <option key={p.id} value={p.id} className="text-gray-900 bg-white">{p.full_name}</option>
                       ))}
                     </select>
                   </div>

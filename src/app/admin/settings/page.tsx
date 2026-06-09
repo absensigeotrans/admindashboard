@@ -90,22 +90,22 @@ export default function SettingsPage() {
             <select
               value={hour}
               onChange={(e) => setHour(e.target.value)}
-              className="px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {Array.from({ length: 24 }, (_, i) => (
-                <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
+                <option key={i} value={i} className="text-gray-900 bg-white">{i.toString().padStart(2, '0')}</option>
               ))}
             </select>
             <span className="text-gray-500 font-medium">:</span>
             <select
               value={minute}
               onChange={(e) => setMinute(e.target.value)}
-              className="px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="0">00</option>
-              <option value="15">15</option>
-              <option value="30">30</option>
-              <option value="45">45</option>
+              <option value="0" className="text-gray-900 bg-white">00</option>
+              <option value="15" className="text-gray-900 bg-white">15</option>
+              <option value="30" className="text-gray-900 bg-white">30</option>
+              <option value="45" className="text-gray-900 bg-white">45</option>
             </select>
           </div>
           <span className="text-gray-500 text-sm">

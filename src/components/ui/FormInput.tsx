@@ -57,7 +57,7 @@ export function FormSelect({ label, error, options, className = '', id, ...props
       <select
         id={selectId}
         className={`
-          w-full px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white
+          w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white
           focus:outline-none focus:ring-2
           ${error
             ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
@@ -67,7 +67,7 @@ export function FormSelect({ label, error, options, className = '', id, ...props
         {...props}
       >
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} value={opt.value} className="text-gray-900 bg-white">
             {opt.label}
           </option>
         ))}

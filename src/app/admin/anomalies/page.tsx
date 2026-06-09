@@ -168,13 +168,13 @@ export default function AnomaliesPage() {
             <select
               value={anomalyFilter}
               onChange={(e) => setAnomalyFilter(e.target.value as AnomalyType)}
-              className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">Semua Anomali ({records.length})</option>
-              {anomalyTypes.has('fake_gps') && <option value="fake_gps">Fake GPS</option>}
-              {anomalyTypes.has('duplicate_checkin') && <option value="duplicate_checkin">Absen Ganda</option>}
-              {anomalyTypes.has('missing_checkout') && <option value="missing_checkout">No Checkout Kemarin</option>}
-              {anomalyTypes.has('duplicate_coordinates') && <option value="duplicate_coordinates">Koordinat Duplikat</option>}
+              <option value="all" className="text-gray-900 bg-white">Semua Anomali ({records.length})</option>
+              {anomalyTypes.has('fake_gps') && <option value="fake_gps" className="text-gray-900 bg-white">Fake GPS</option>}
+              {anomalyTypes.has('duplicate_checkin') && <option value="duplicate_checkin" className="text-gray-900 bg-white">Absen Ganda</option>}
+              {anomalyTypes.has('missing_checkout') && <option value="missing_checkout" className="text-gray-900 bg-white">No Checkout Kemarin</option>}
+              {anomalyTypes.has('duplicate_coordinates') && <option value="duplicate_coordinates" className="text-gray-900 bg-white">Koordinat Duplikat</option>}
             </select>
           </div>
           <div>

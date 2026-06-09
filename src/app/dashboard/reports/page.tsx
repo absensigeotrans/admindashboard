@@ -285,11 +285,11 @@ export default function ViewerReportsPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as AttendanceStatus | '')}
-              className="w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 border rounded-xl text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">All Status</option>
-              <option value="present">Present</option>
-              <option value="late">Late</option>
+              <option value="" className="text-gray-900 bg-white">All Status</option>
+              <option value="present" className="text-gray-900 bg-white">Present</option>
+              <option value="late" className="text-gray-900 bg-white">Late</option>
             </select>
           </div>
           <div className="w-full lg:w-48">
@@ -297,10 +297,10 @@ export default function ViewerReportsPage() {
             <select
               value={mockFilter}
               onChange={(e) => { setMockFilter(e.target.value); setPage(1); }}
-              className="w-full px-3 py-2.5 border rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 border rounded-xl text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Semua Records</option>
-              <option value="suspicious">Hanya Kejanggalan</option>
+              <option value="" className="text-gray-900 bg-white">Semua Records</option>
+              <option value="suspicious" className="text-gray-900 bg-white">Hanya Kejanggalan</option>
             </select>
           </div>
           <div className="flex gap-2">

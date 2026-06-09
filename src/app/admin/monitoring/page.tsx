@@ -218,22 +218,22 @@ export default function MonitoringPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">All Status</option>
-            <option value="present">Present</option>
-            <option value="late">Late</option>
-            <option value="outside_radius">Outside Radius</option>
+            <option value="all" className="text-gray-900 bg-white">All Status</option>
+            <option value="present" className="text-gray-900 bg-white">Present</option>
+            <option value="late" className="text-gray-900 bg-white">Late</option>
+            <option value="outside_radius" className="text-gray-900 bg-white">Outside Radius</option>
           </select>
           {/* Event Type Filter */}
           <select
             value={eventFilter}
             onChange={(e) => setEventFilter(e.target.value as EventType)}
-            className="px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">All Events</option>
-            <option value="check_in">Check-in Only</option>
-            <option value="check_out">Check-out Only</option>
+            <option value="all" className="text-gray-900 bg-white">All Events</option>
+            <option value="check_in" className="text-gray-900 bg-white">Check-in Only</option>
+            <option value="check_out" className="text-gray-900 bg-white">Check-out Only</option>
           </select>
           <div className="ml-auto text-sm text-gray-500">
             Showing {filteredRecords.length} of {liveRecords.length} records
