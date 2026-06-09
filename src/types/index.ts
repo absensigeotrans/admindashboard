@@ -10,6 +10,7 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   shift_type?: ShiftType | null;
+  today_shift_type?: ShiftType | null;
   employee_id?: string;
   nik?: string;
   created_at: string;

@@ -18,6 +18,42 @@ interface CreateEmployeeData {
   shift_type?: ShiftType | null;
 }
 
+async function enrichEmployeesWithTodayShift(employees: Profile[]): Promise<Profile[]> {
+  if (employees.length === 0) return [];
+
+  const userIds = employees.map((e) => e.id);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+
+  try {
+    const { data: todayShifts, error } = await supabase
+      .from('user_shift_schedules')
+      .select('user_id, shift_type')
+      .in('user_id', userIds)
+      .eq('schedule_date', today);
+
+    if (error) {
+      console.error('Error fetching today shifts:', error);
+      return employees;
+    }
+
+    const shiftMap = new Map<string, string>();
+    for (const s of todayShifts || []) {
+      shiftMap.set(s.user_id, s.shift_type);
+    }
+
+    return employees.map((emp) => {
+      const todayShift = shiftMap.get(emp.id);
+      return {
+        ...emp,
+        today_shift_type: (todayShift as ShiftType) || null,
+      };
+    });
+  } catch (err) {
+    console.error('Error in enrichEmployeesWithTodayShift:', err);
+    return employees;
+  }
+}
+
 export function useEmployees() {
   const [employees, setEmployees] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,8 +76,9 @@ export function useEmployees() {
       const { data, error: fetchError, count } = await query;
       if (fetchError) throw fetchError;
 
-      setEmployees((data as Profile[]) || []);
-      return { data: data as Profile[], count: count || 0 };
+      const enriched = await enrichEmployeesWithTodayShift((data as Profile[]) || []);
+      setEmployees(enriched);
+      return { data: enriched, count: count || 0 };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch employees';
       setError(msg);

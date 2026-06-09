@@ -230,11 +230,14 @@ export default function EmployeesPage() {
   // CSV Export
   const exportCSV = () => {
     const headers = ['Name', 'Email', 'Role', 'Shift', 'Status', 'Created'];
-    const rows = employees.map((e) => [
-      e.full_name, e.email, e.role, 
-      e.shift_type === 'morning' ? 'Pagi' : e.shift_type === 'afternoon' ? 'Siang' : e.shift_type === 'full_time' ? 'Full Time' : e.shift_type === 'non_shifting' ? 'Non-Shifting' : '—',
-      'active', e.created_at,
-    ]);
+    const rows = employees.map((e) => {
+      const activeShift = e.today_shift_type || e.shift_type;
+      return [
+        e.full_name, e.email, e.role, 
+        activeShift === 'morning' ? 'Pagi' : activeShift === 'afternoon' ? 'Siang' : activeShift === 'full_time' ? 'Full Time' : activeShift === 'non_shifting' ? 'Non-Shifting' : '—',
+        'active', e.created_at,
+      ];
+    });
     const csv = [headers, ...rows]
       .map((r) => r.map((c) => `"${c}"`).join(','))
       .join('\n');
@@ -333,21 +336,28 @@ export default function EmployeesPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        emp.shift_type === 'morning'
-                          ? 'bg-blue-100 text-blue-700'
-                          : emp.shift_type === 'afternoon'
-                          ? 'bg-orange-100 text-orange-700'
-                          : emp.shift_type === 'full_time'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {emp.shift_type === 'morning' ? 'Pagi' :
-                         emp.shift_type === 'afternoon' ? 'Siang' :
-                         emp.shift_type === 'full_time' ? 'Full Time' :
-                         emp.shift_type === 'non_shifting' ? 'Non-Shifting' :
-                         '—'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          (emp.today_shift_type || emp.shift_type) === 'morning'
+                            ? 'bg-blue-100 text-blue-700'
+                            : (emp.today_shift_type || emp.shift_type) === 'afternoon'
+                            ? 'bg-orange-100 text-orange-700'
+                            : (emp.today_shift_type || emp.shift_type) === 'full_time'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {(emp.today_shift_type || emp.shift_type) === 'morning' ? 'Pagi' :
+                           (emp.today_shift_type || emp.shift_type) === 'afternoon' ? 'Siang' :
+                           (emp.today_shift_type || emp.shift_type) === 'full_time' ? 'Full Time' :
+                           (emp.today_shift_type || emp.shift_type) === 'non_shifting' ? 'Non-Shifting' :
+                           '—'}
+                        </span>
+                        {emp.today_shift_type && (
+                          <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded leading-none">
+                            Hari Ini
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -458,13 +468,26 @@ export default function EmployeesPage() {
               </div>
               <div>
                 <p className="text-gray-500">Shift</p>
-                <p className="font-medium">
-                  {detailEmployee.shift_type === 'morning' ? 'Pagi (06:00-14:00)' :
-                   detailEmployee.shift_type === 'afternoon' ? 'Siang (10:00-18:00)' :
-                   detailEmployee.shift_type === 'full_time' ? 'Full Time (07:00-16:00)' :
-                   detailEmployee.shift_type === 'non_shifting' ? 'Non-Shifting' :
-                   '—'}
-                </p>
+                <div className="flex items-center gap-1.5 font-medium mt-0.5">
+                  <span>
+                    {detailEmployee.today_shift_type ? (
+                      detailEmployee.today_shift_type === 'morning' ? 'Pagi (06:00-14:00)' :
+                      detailEmployee.today_shift_type === 'afternoon' ? 'Siang (10:00-18:00)' :
+                      detailEmployee.today_shift_type === 'full_time' ? 'Full Time (07:00-16:00)' : '—'
+                    ) : (
+                      detailEmployee.shift_type === 'morning' ? 'Pagi (06:00-14:00)' :
+                      detailEmployee.shift_type === 'afternoon' ? 'Siang (10:00-18:00)' :
+                      detailEmployee.shift_type === 'full_time' ? 'Full Time (07:00-16:00)' :
+                      detailEmployee.shift_type === 'non_shifting' ? 'Non-Shifting' :
+                      '—'
+                    )}
+                  </span>
+                  {detailEmployee.today_shift_type && (
+                    <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded leading-none">
+                      Hari Ini
+                    </span>
+                  )}
+                </div>
               </div>
               <div>
                 <p className="text-gray-500">Joined</p>
