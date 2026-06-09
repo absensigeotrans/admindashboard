@@ -58,6 +58,16 @@ class AuthService extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      // Check if NIK already exists to prevent generic DB error saving new user
+      final exists = await _supabase.rpc('check_employee_id_exists', params: {
+        'emp_id': employeeId,
+      });
+      if (exists == true) {
+        _isLoading = false;
+        notifyListeners();
+        return 'NIK/ID Karyawan sudah terdaftar. Silakan hubungi Admin.';
+      }
+
       await _supabase.auth.signUp(
         email: email,
         password: password,

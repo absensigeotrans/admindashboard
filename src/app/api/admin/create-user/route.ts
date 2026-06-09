@@ -27,6 +27,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check if employee_id (NIK) already exists
+    if (employee_id) {
+      const { data: existingNik } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('employee_id', employee_id)
+        .maybeSingle();
+
+      if (existingNik) {
+        return NextResponse.json(
+          { error: 'NIK/ID Karyawan sudah terdaftar' },
+          { status: 409 }
+        );
+      }
+    }
+
     // 2. Create auth user
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email.toLowerCase(),
