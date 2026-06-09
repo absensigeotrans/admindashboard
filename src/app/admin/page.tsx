@@ -3,8 +3,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useOffices } from '@/hooks/useOffices';
-import { useEmployees } from '@/hooks/useEmployees';
-import { useReports } from '@/hooks/useReports';
 import dynamic from 'next/dynamic';
 import { useDashboardAnalytics, Period } from '@/hooks/useDashboardAnalytics';
 import { supabase } from '@/lib/supabase';
@@ -57,8 +55,6 @@ interface RecentActivityRecord {
 export default function AdminDashboard() {
   const { history, fetchHistory } = useAttendance();
   const { offices, fetchOffices } = useOffices();
-  const { fetchEmployees } = useEmployees();
-  const { fetchDashboardData, getEmployeeSummary } = useReports();
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats>({
     totalClockIns: 0,
   });
@@ -78,13 +74,10 @@ export default function AdminDashboard() {
     await Promise.all([
       fetchHistory(100),
       fetchOffices(),
-      fetchEmployees(1, 10),
     ]);
-    // Also fetch dashboard data with user profiles
-    await fetchDashboardData(30);
     setRefreshing(false);
     setLoading(false);
-  }, [fetchHistory, fetchOffices, fetchEmployees, fetchDashboardData]);
+  }, [fetchHistory, fetchOffices]);
 
   // Initial load + auto-refresh every 30 seconds
   useEffect(() => {

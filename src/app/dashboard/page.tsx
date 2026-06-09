@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import useSWR from 'swr';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useOffices } from '@/hooks/useOffices';
-import { useEmployees } from '@/hooks/useEmployees';
-import { useReports } from '@/hooks/useReports';
 import dynamic from 'next/dynamic';
 import { useDashboardAnalytics, Period } from '@/hooks/useDashboardAnalytics';
 import { supabase } from '@/lib/supabase';
@@ -62,8 +60,6 @@ interface RecentActivityRecord {
 export default function ViewerDashboard() {
   const { history, fetchHistory } = useAttendance();
   const { offices, fetchOffices } = useOffices();
-  const { fetchEmployees } = useEmployees();
-  const { fetchDashboardData, getEmployeeSummary } = useReports();
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats>({
     totalClockIns: 0, avgCheckIn: '--:--', avgDistance: 0, lateRate: '0%', avgCheckOut: '--:--', avgWorkingHours: '--:--',
   });
@@ -82,12 +78,10 @@ export default function ViewerDashboard() {
     await Promise.all([
       fetchHistory(100),
       fetchOffices(),
-      fetchEmployees(1, 10),
-      fetchDashboardData(30),
     ]);
     setRefreshing(false);
     setLoading(false);
-  }, [fetchHistory, fetchOffices, fetchEmployees, fetchDashboardData]);
+  }, [fetchHistory, fetchOffices]);
 
   useEffect(() => {
     loadData();
