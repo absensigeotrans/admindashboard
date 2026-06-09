@@ -62,25 +62,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final shiftService = ShiftScheduleService();
       final todayShift = await shiftService.getTodayShift(user.id);
       if (mounted) {
-        setState(() {
-          _todayShift = todayShift ?? '';
-        });
-        // Auto-prompt shift selection for Juru Parkir who haven't selected
-        final role = Provider.of<AuthService>(context, listen: false).profile?['role'] ?? '';
+        final authService = Provider.of<AuthService>(context, listen: false);
+        final role = authService.profile?['role'] ?? '';
+        final profileShift = authService.profile?['shift_type'] ?? '';
+        
+        String resolvedShift = todayShift ?? '';
+        
         if (role == 'juru_parkir' && todayShift == null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            if (mounted) {
-              await _showShiftSelectionDialog(user.id);
-              // Re-fetch shift after selection to update UI
-              final newShift = await shiftService.getTodayShift(user.id);
+          if (profileShift != null && profileShift.isNotEmpty && profileShift != 'non_shifting') {
+            // Automatically set today's shift to their profile's shift_type
+            await shiftService.selectShift(user.id, profileShift);
+            resolvedShift = profileShift;
+          } else {
+            // Auto-prompt shift selection for Juru Parkir who haven't selected
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
               if (mounted) {
-                setState(() {
-                  _todayShift = newShift ?? '';
-                });
+                await _showShiftSelectionDialog(user.id);
+                // Re-fetch shift after selection to update UI
+                final newShift = await shiftService.getTodayShift(user.id);
+                if (mounted) {
+                  setState(() {
+                    _todayShift = newShift ?? '';
+                  });
+                }
               }
-            }
-          });
+            });
+          }
         }
+        
+        setState(() {
+          _todayShift = resolvedShift;
+        });
       }
     }
   }
@@ -217,9 +229,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Show shift selection dialog for Juru Parkir
   Future<void> _showShiftSelectionDialog(String userId) async {
     final shiftService = ShiftScheduleService();
-    String? selectedShift;
+    final authService = Provider.of<AuthService>(context, listen: false);
 
-    await showDialog(
+    final selectedShift = await showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
@@ -234,10 +246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    selectedShift = 'morning';
-                    Navigator.pop(context);
-                  },
+                  onPressed: () => Navigator.pop(context, 'morning'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF005494),
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -254,10 +263,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    selectedShift = 'afternoon';
-                    Navigator.pop(context);
-                  },
+                  onPressed: () => Navigator.pop(context, 'afternoon'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -274,10 +280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    selectedShift = 'full_time';
-                    Navigator.pop(context);
-                  },
+                  onPressed: () => Navigator.pop(context, 'full_time'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.grey,
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -297,8 +300,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     if (selectedShift != null) {
-      await shiftService.selectShift(userId, selectedShift!);
+      await shiftService.selectShift(userId, selectedShift);
       if (mounted) {
+        await authService.refreshProfile();
         final shiftLabel = selectedShift == 'morning' ? 'Pagi' : selectedShift == 'afternoon' ? 'Siang' : 'Full Time';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -409,20 +413,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (isJuruParkir && _todayAttendance == null) {
       final hasShift = await _checkJuruParkirShift(user.id);
       if (!hasShift && mounted) {
-        await _showShiftSelectionDialog(user.id);
-        // After selection, check again
-        final stillNoShift = await _checkJuruParkirShift(user.id);
-        if (!stillNoShift) {
-          // User didn't select shift, cancel check-in
-          setState(() => _isProcessing = false);
-          return;
-        }
-        // Update shift badge display
-        final newShift = await ShiftScheduleService().getTodayShift(user.id);
-        if (mounted) {
-          setState(() {
-            _todayShift = newShift ?? '';
-          });
+        final profileShift = authService.profile?['shift_type'] ?? '';
+        if (profileShift != null && profileShift.isNotEmpty && profileShift != 'non_shifting') {
+          // Automatically set today's shift to profile shift
+          await ShiftScheduleService().selectShift(user.id, profileShift);
+          final newShift = await ShiftScheduleService().getTodayShift(user.id);
+          if (mounted) {
+            setState(() {
+              _todayShift = newShift ?? '';
+            });
+          }
+        } else {
+          await _showShiftSelectionDialog(user.id);
+          // After selection, check again
+          final stillNoShift = await _checkJuruParkirShift(user.id);
+          if (!stillNoShift) {
+            // User didn't select shift, cancel check-in
+            setState(() => _isProcessing = false);
+            return;
+          }
+          // Update shift badge display
+          final newShift = await ShiftScheduleService().getTodayShift(user.id);
+          if (mounted) {
+            setState(() {
+              _todayShift = newShift ?? '';
+            });
+          }
         }
       }
     }
@@ -1219,48 +1235,71 @@ try {
                   ),
                   // Show shift info for Juru Parkir
                   if (role == 'juru_parkir')
-                    Container(
-                      margin: const EdgeInsets.only(top: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _todayShift.isEmpty
-                            ? Colors.yellow[100]
-                            : (_todayShift == 'morning' ? Colors.blue[100] : _todayShift == 'afternoon' ? Colors.orange[100] : Colors.grey[200]),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.schedule,
-                            size: 16,
+                    GestureDetector(
+                      onTap: _isProcessing
+                          ? null
+                          : () async {
+                              final supabase = Supabase.instance.client;
+                              final user = supabase.auth.currentUser;
+                              if (user != null) {
+                                await _showShiftSelectionDialog(user.id);
+                                final newShift = await ShiftScheduleService().getTodayShift(user.id);
+                                if (mounted) {
+                                  setState(() {
+                                    _todayShift = newShift ?? '';
+                                  });
+                                }
+                              }
+                            },
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _todayShift.isEmpty
+                              ? Colors.yellow[100]
+                              : (_todayShift == 'morning' ? Colors.blue[100] : _todayShift == 'afternoon' ? Colors.orange[100] : Colors.grey[200]),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
                             color: _todayShift.isEmpty
-                                ? Colors.orange
-                                : (_todayShift == 'morning' ? Colors.blue[800] : _todayShift == 'afternoon' ? Colors.orange[800] : Colors.grey[800]),
+                                ? Colors.orange.withOpacity(0.3)
+                                : (_todayShift == 'morning' ? Colors.blue.withOpacity(0.3) : _todayShift == 'afternoon' ? Colors.orange.withOpacity(0.3) : Colors.grey.withOpacity(0.3)),
+                            width: 1,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _todayShift.isEmpty
-                                ? 'Shift: Belum Pilih'
-                                : 'Shift ${_todayShift == 'morning' ? 'Pagi' : _todayShift == 'afternoon' ? 'Siang' : 'Full Time'}',
-                            style: TextStyle(
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.schedule,
+                              size: 16,
                               color: _todayShift.isEmpty
                                   ? Colors.orange
                                   : (_todayShift == 'morning' ? Colors.blue[800] : _todayShift == 'afternoon' ? Colors.orange[800] : Colors.grey[800]),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
                             ),
-                          ),
-                          if (_todayShift.isNotEmpty) ...[
+                            const SizedBox(width: 4),
                             Text(
-                              ' • Batas ${_todayShift == 'morning' ? '06:03' : _todayShift == 'afternoon' ? '10:03' : '07:03'}',
+                              _todayShift.isEmpty
+                                  ? 'Shift: Belum Pilih (Ketuk di sini)'
+                                  : 'Shift ${_todayShift == 'morning' ? 'Pagi' : _todayShift == 'afternoon' ? 'Siang' : 'Full Time'} (Ketuk untuk ganti)',
                               style: TextStyle(
-                                color: _todayShift == 'morning' ? Colors.blue[600] : _todayShift == 'afternoon' ? Colors.orange[600] : Colors.grey[600],
-                                fontSize: 11,
+                                color: _todayShift.isEmpty
+                                    ? Colors.orange
+                                    : (_todayShift == 'morning' ? Colors.blue[800] : _todayShift == 'afternoon' ? Colors.orange[800] : Colors.grey[800]),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
                               ),
                             ),
+                            if (_todayShift.isNotEmpty) ...[
+                              Text(
+                                ' • Batas ${_todayShift == 'morning' ? '06:03' : _todayShift == 'afternoon' ? '10:03' : '07:03'}',
+                                style: TextStyle(
+                                  color: _todayShift == 'morning' ? Colors.blue[600] : _todayShift == 'afternoon' ? Colors.orange[600] : Colors.grey[600],
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   if (locationService.isMocked)

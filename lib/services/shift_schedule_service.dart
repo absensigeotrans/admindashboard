@@ -42,6 +42,12 @@ class ShiftScheduleService {
             'shift_type': shiftType,
           }, onConflict: 'user_id,schedule_date');
       
+      // Update profiles shift_type as well so that it automatically updates their permanent profile shift
+      await _supabase
+          .from('profiles')
+          .update({'shift_type': shiftType})
+          .eq('id', userId);
+      
       return true;
     } catch (e) {
       _logDebug('Error selecting shift: $e');
