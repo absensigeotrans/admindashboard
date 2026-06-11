@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
@@ -12,6 +13,11 @@ const nextConfig: NextConfig = {
         hostname: '*.supabase.co',
       },
     ],
+  },
+  experimental: {
+    serverActions: {
+      allowedOrigins: ['*.pages.dev'],
+    },
   },
   async headers() {
     return [
