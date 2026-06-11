@@ -4,8 +4,6 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import BrandSplashScreen from "@/components/BrandSplashScreen";
 
-export const runtime = 'edge';
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -83,4 +81,3 @@ export default async function RootLayout({
     </html>
   );
 }
-
