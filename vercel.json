@@ -1,8 +1,7 @@
 {
-  "crons": [
-    {
-      "path": "/login",
-      "schedule": "*/10 * * * *"
-    }
-  ]
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs"
 }

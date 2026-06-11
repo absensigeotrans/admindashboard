@@ -14,11 +14,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  experimental: {
-    serverActions: {
-      allowedOrigins: ['*.pages.dev'],
-    },
-  },
   async headers() {
     return [
       {
