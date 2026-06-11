@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'export', // 👈 WAJIB: Mengubah Next.js menjadi file statis murni buat Cloudflare Pages
   images: {
-    unoptimized: true, // 👈 WAJIB: Mematikan optimasi gambar bawaan server karena tidak pakai hosting Node.js
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
@@ -15,9 +14,23 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Catatan: Fungsi async headers() dihapus karena tidak didukung oleh Static Export ('output: 'export'').
-  // Untuk pengaturan keamanan header (X-Frame-Options, dll) di Cloudflare Pages, 
-  // nanti bisa diatur langsung lewat file _headers di folder public jika memang sangat butuh.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
