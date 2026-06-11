@@ -26,21 +26,23 @@ import {
   ShieldAlert,
   LogOut,
   Image,
+  UserCog,
 } from 'lucide-react';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
-  { href: '/admin/employees', icon: Users, label: 'Employees' },
-  { href: '/admin/offices', icon: Building2, label: 'Offices' },
-  { href: '/admin/reports', icon: FileText, label: 'Reports' },
+  { href: '/admin/employees', icon: Users, label: 'Kelola Karyawan' },
+  { href: '/admin/admins', icon: UserCog, label: 'Kelola Admin' },
+  { href: '/admin/offices', icon: Building2, label: 'Kelola Kantor' },
+  { href: '/admin/reports', icon: FileText, label: 'Laporan Harian' },
   { href: '/admin/monthly-recap', icon: CalendarDays, label: 'Rekap Bulanan' },
-  { href: '/admin/attendance-rate', icon: BarChart3, label: 'Attendance Rate' },
-  { href: '/admin/leave-requests', icon: CalendarX, label: 'Leave Requests', badgeKey: 'pendingLeaves' },
-  { href: '/admin/monitoring', icon: Radio, label: 'Live Monitoring' },
-  { href: '/admin/anomalies', icon: ShieldAlert, label: 'Anomali', badgeKey: 'anomalies' },
-  { href: '/admin/photos', icon: Image, label: 'Photos' },
-  { href: '/admin/activity-logs', icon: Activity, label: 'Activity Logs' },
-  { href: '/admin/settings', icon: Settings, label: 'Settings' },
+  { href: '/admin/attendance-rate', icon: BarChart3, label: 'Tingkat Kehadiran' },
+  { href: '/admin/leave-requests', icon: CalendarX, label: 'Pengajuan Cuti', badgeKey: 'pendingLeaves' },
+  { href: '/admin/monitoring', icon: Radio, label: 'Pemantauan Langsung' },
+  { href: '/admin/anomalies', icon: ShieldAlert, label: 'Deteksi Anomali', badgeKey: 'anomalies' },
+  { href: '/admin/photos', icon: Image, label: 'Foto Selfie' },
+  { href: '/admin/activity-logs', icon: Activity, label: 'Log Aktivitas' },
+  { href: '/admin/settings', icon: Settings, label: 'Pengaturan Sistem' },
 ];
 
 interface SidebarStats {
@@ -185,13 +187,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {/* Current Date/Time */}
         <div className="px-5 py-3 border-b border-white/20 bg-white/10 backdrop-blur-sm">
           <div className="text-xs text-white/70">
-            {format(currentTime, 'EEEE')}
+            {currentTime.toLocaleDateString('id-ID', { weekday: 'long' })}
           </div>
           <div className="text-sm font-medium text-white">
-            {format(currentTime, 'dd MMMM yyyy')}
+            {currentTime.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
           </div>
           <div className="text-2xl font-bold text-white">
-            {format(currentTime, 'HH:mm')}
+            {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':')}
           </div>
         </div>
 
@@ -231,23 +233,23 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
         {/* Quick Stats Footer */}
         <div className="px-4 py-3 border-t border-white/20 bg-white/10 backdrop-blur-sm">
-          <div className="text-xs font-medium text-white/70 mb-2">Today&apos;s Summary</div>
+          <div className="text-xs font-medium text-white/70 mb-2">Ringkasan Hari Ini</div>
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center bg-white/20 backdrop-blur-sm rounded-lg py-1.5 px-1">
               <CheckCircle className="w-4 h-4 text-white mx-auto mb-0.5" />
               <div className="text-sm font-bold text-white">{loading ? '-' : stats.present}</div>
-              <div className="text-[10px] text-white/80">Present</div>
+              <div className="text-[10px] text-white/80">Hadir</div>
             </div>
             <div className="text-center bg-white/20 backdrop-blur-sm rounded-lg py-1.5 px-1">
               <Clock className="w-4 h-4 text-white mx-auto mb-0.5" />
               <div className="text-sm font-bold text-white">{loading ? '-' : stats.late}</div>
-              <div className="text-[10px] text-white/80">Late</div>
+              <div className="text-[10px] text-white/80">Terlambat</div>
             </div>
             {stats.suspicious > 0 && (
               <div className="text-center bg-white/20 backdrop-blur-sm rounded-lg py-1.5 px-1">
                 <AlertTriangle className="w-4 h-4 text-white mx-auto mb-0.5" />
                 <div className="text-sm font-bold text-white">{loading ? '-' : stats.suspicious}</div>
-                <div className="text-[10px] text-white/80">Suspicious</div>
+                <div className="text-[10px] text-white/80">Mencurigakan</div>
               </div>
             )}
             {stats.suspicious === 0 && (
@@ -279,7 +281,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-white/20 hover:bg-white/30 transition-all duration-200"
           >
             <LogOut className="w-4 h-4" />
-            Sign Out
+            Keluar
           </button>
         </div>
       </aside>

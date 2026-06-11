@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
         employee_id: employee_id || null,
         nik: nik || null,
         shift_type: shift_type || null,
+        registered_password: password,
       },
     });
 
@@ -84,6 +85,7 @@ export async function POST(req: NextRequest) {
         shift_type: shift_type || null,
         nik: nik || null,
         employee_id: employee_id || null,
+        registered_password: password,
         is_active: true,
       }, { onConflict: 'id' });
 

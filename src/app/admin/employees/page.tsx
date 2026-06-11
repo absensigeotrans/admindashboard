@@ -14,7 +14,7 @@ import { FormInput, FormSelect } from '@/components/ui/FormInput';
 import { toast } from '@/components/ui/Toast';
 import { Profile, UserRole, ShiftType } from '@/types';
 import { getWIBDate, formatWIBDateDisplay } from '@/lib/timezone';
-import { Users, Building2, UserCog, Download, Clock, UserPlus, Trash2 } from 'lucide-react';
+import { Users, Building2, UserCog, Download, Clock, UserPlus, Trash2, Eye, EyeOff } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
@@ -36,6 +36,9 @@ export default function EmployeesPage() {
   const [editRole, setEditRole] = useState<UserRole>('viewer');
   const [editShift, setEditShift] = useState<ShiftType | ''>('');
   const [saving, setSaving] = useState(false);
+  
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [showDetailPassword, setShowDetailPassword] = useState(false);
   
   // Delete confirm modal
   const [deleteConfirmEmployee, setDeleteConfirmEmployee] = useState<Profile | null>(null);
@@ -77,6 +80,7 @@ export default function EmployeesPage() {
   };
 
   const openEdit = (emp: Profile) => {
+    setShowEditPassword(false);
     setEditEmployee(emp);
     setEditFullName(emp.full_name);
     // Convert old 'employee' role to 'viewer' (for backward compatibility)
@@ -145,6 +149,7 @@ export default function EmployeesPage() {
   };
 
   const openDetail = async (emp: Profile) => {
+    setShowDetailPassword(false);
     setDetailEmployee(emp);
     const { data } = await supabase
       .from('attendance')
@@ -423,6 +428,21 @@ export default function EmployeesPage() {
                 { value: 'afternoon', label: 'Siang (10:00-18:00)' },
               ]}
             />
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-gray-700">Password Terdaftar</label>
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border rounded-lg text-sm text-gray-905 font-mono select-all">
+                <span>{showEditPassword ? (editEmployee as any).registered_password || '—' : '••••••••'}</span>
+                {(editEmployee as any).registered_password && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPassword(!showEditPassword)}
+                    className="ml-auto p-1 text-gray-400 hover:text-gray-600 rounded"
+                  >
+                    {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="flex gap-2 pt-2">
               <Button onClick={handleSaveEdit} className="flex-1">
                 Save Changes
@@ -448,6 +468,22 @@ export default function EmployeesPage() {
               <div>
                 <p className="text-gray-500">Email</p>
                 <p className="font-medium text-gray-900">{detailEmployee.email}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Password Terdaftar</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="font-medium text-gray-900 font-mono">
+                    {showDetailPassword ? (detailEmployee as any).registered_password || '—' : '••••••••'}
+                  </span>
+                  {(detailEmployee as any).registered_password && (
+                    <button
+                      onClick={() => setShowDetailPassword(!showDetailPassword)}
+                      className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                    >
+                      {showDetailPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+                </div>
               </div>
               <div>
                 <p className="text-gray-500">Role</p>

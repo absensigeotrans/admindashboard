@@ -6,18 +6,19 @@ import { useAuth } from '@/context/AuthContext';
 import { Toast } from '@/components/Toast';
 import { Mail, Lock, Eye, EyeOff, Loader2, Ship, Anchor, Waves, Sparkles } from 'lucide-react';
 import Image from 'next/image';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, profile, signIn, signUp, loading: authLoading } = useAuth();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const { user, profile, signIn, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [formVisible, setFormVisible] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => setFormVisible(true), 300);
@@ -39,24 +40,35 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    let result;
-    if (isSignUp) {
-      result = await signUp(email, password, fullName);
-    } else {
-      result = await signIn(email, password);
-    }
+    const result = await signIn(email, password);
 
     setLoading(false);
 
     if (result.error) {
       setToast({ message: result.error.message, type: 'error' });
     } else {
-      if (isSignUp) {
-        setToast({ message: 'Account created! Please check your email to verify.', type: 'success' });
-        setIsSignUp(false);
+      setToast({ message: 'Berhasil masuk!', type: 'success' });
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        setToast({ message: error.message, type: 'error' });
       } else {
-        setToast({ message: 'Signed in successfully!', type: 'success' });
+        setToast({ message: 'Tautan reset kata sandi telah dikirim ke email Anda!', type: 'success' });
+        setIsForgotPassword(false);
+        setForgotEmail('');
       }
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Gagal mengirim email reset', type: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -112,7 +124,7 @@ export default function LoginPage() {
 
           {/* Tagline */}
           <p className="text-xl font-light tracking-widest uppercase mb-4 opacity-90 animate-slide-up">
-            Integrated Maritime Logistics
+            Logistik Maritim Terintegrasi
           </p>
 
           {/* Decorative Divider */}
@@ -126,23 +138,23 @@ export default function LoginPage() {
                 <div className="absolute inset-0 bg-white/20 rounded-full blur-sm animate-pulse"></div>
               </div>
               <p className="text-2xl font-bold">379+</p>
-              <p className="text-sm opacity-70">Vessels</p>
+              <p className="text-sm opacity-70">Kapal</p>
             </div>
             <div className="animate-slide-up" style={{ animationDelay: '0.4s' }}>
               <Anchor className="w-8 h-8 mx-auto mb-2 opacity-80" />
               <p className="text-2xl font-bold">55+</p>
-              <p className="text-sm opacity-70">Years</p>
+              <p className="text-sm opacity-70">Tahun</p>
             </div>
             <div className="animate-slide-up" style={{ animationDelay: '0.6s' }}>
               <Waves className="w-8 h-8 mx-auto mb-2 opacity-80" />
-              <p className="text-2xl font-bold">Nationwide</p>
-              <p className="text-sm opacity-70">Coverage</p>
+              <p className="text-2xl font-bold">Nasional</p>
+              <p className="text-sm opacity-70">Cakupan Wilayah</p>
             </div>
           </div>
 
           {/* Quote */}
           <blockquote className="text-center max-w-md italic opacity-80 text-sm leading-relaxed animate-slide-up" style={{ animationDelay: '0.8s' }}>
-            &ldquo;Delivers high-standard energy and logistics shipping services since 1969, supported by an extensive nationwide network.&rdquo;
+            &ldquo;Menyediakan layanan pengiriman energi dan logistik maritim berstandar tinggi sejak 1969, didukung oleh jaringan nasional yang luas.&rdquo;
           </blockquote>
         </div>
 
@@ -181,130 +193,154 @@ export default function LoginPage() {
               {/* Header */}
               <div className="text-center mb-6 animate-slide-up">
                 <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-[#03045E] via-[#0077B6] to-[#00B4D8] bg-clip-text text-transparent">
-                  {isSignUp ? 'Create Account' : 'Welcome Back'}
+                  {isForgotPassword ? 'Lupa Kata Sandi' : 'Selamat Datang Kembali'}
                 </h2>
                 <p className="text-sm sm:text-base text-gray-500 mt-2">
-                  {isSignUp
-                    ? 'Sign up to access GeoAttend Pro'
-                    : 'Sign in to your account'}
+                  {isForgotPassword
+                    ? 'Masukkan alamat email Anda untuk menerima tautan atur ulang kata sandi'
+                    : 'Masuk ke akun Anda'}
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-                {isSignUp && (
-                  <div className="animate-slide-up">
+              {isForgotPassword ? (
+                <form onSubmit={handleForgotPassword} className="space-y-4 sm:space-y-5">
+                  <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                     <label className="block text-sm font-medium text-gray-600 mb-1.5">
-                      Full Name
+                      Alamat Email
                     </label>
                     <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#90E0EF]/20 to-[#0077B6]/20 rounded-xl blur opacity-30"></div>
-                      <input
-                        type="text"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        required
-                        className="relative w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-[#00B4D8]/40 focus:border-[#00B4D8] outline-none transition-all bg-gray-700 text-white placeholder-gray-400 backdrop-blur"
-                        placeholder="Enter your full name"
-                      />
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#0077B6]/10 to-[#00B4D8]/10 rounded-xl blur opacity-20"></div>
+                      <div className="relative flex items-center">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
+                        <input
+                          type="email"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          required
+                          className="w-full pl-11 pr-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-[#00B4D8]/40 focus:border-[#00B4D8] outline-none transition-all bg-gray-700 text-white placeholder-gray-400 backdrop-blur"
+                          placeholder="nama@pertamina.com"
+                        />
+                      </div>
                     </div>
                   </div>
-                )}
 
-                <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-                  <label className="block text-sm font-medium text-gray-600 mb-1.5">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#0077B6]/10 to-[#00B4D8]/10 rounded-xl blur opacity-20"></div>
-                    <div className="relative flex items-center">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        className="w-full pl-11 pr-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-[#00B4D8]/40 focus:border-[#00B4D8] outline-none transition-all bg-gray-700 text-white placeholder-gray-400 backdrop-blur"
-                        placeholder="name@pertamina.com"
-                      />
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="relative w-full py-3.5 overflow-hidden rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#03045E] via-[#0077B6] to-[#00B4D8]"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#0077B6] via-[#00B4D8] to-[#03045E] opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <div className="relative flex items-center justify-center gap-2 text-white font-semibold">
+                      {loading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <span>Kirim Tautan Atur Ulang</span>
+                      )}
+                    </div>
+                  </button>
+
+                  <div className="text-center mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsForgotPassword(false)}
+                      className="text-sm text-[#0077B6] hover:text-[#00B4D8] font-semibold transition-colors"
+                    >
+                      Kembali ke Login
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+                  <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                    <label className="block text-sm font-medium text-gray-600 mb-1.5">
+                      Alamat Email
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#0077B6]/10 to-[#00B4D8]/10 rounded-xl blur opacity-20"></div>
+                      <div className="relative flex items-center">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                          className="w-full pl-11 pr-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-[#00B4D8]/40 focus:border-[#00B4D8] outline-none transition-all bg-gray-700 text-white placeholder-gray-400 backdrop-blur"
+                          placeholder="nama@pertamina.com"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-                  <label className="block text-sm font-medium text-gray-600 mb-1.5">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#0077B6]/10 to-[#00B4D8]/10 rounded-xl blur opacity-20"></div>
-                    <div className="relative flex items-center">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        minLength={6}
-                        className="w-full pl-11 pr-12 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-[#00B4D8]/40 focus:border-[#00B4D8] outline-none transition-all bg-gray-700 text-white placeholder-gray-400 backdrop-blur"
-                        placeholder="Enter your password"
-                      />
+                  <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="block text-sm font-medium text-gray-600">
+                        Kata Sandi
+                      </label>
                       <button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-100 transition-colors"
+                        onClick={() => setIsForgotPassword(true)}
+                        className="text-xs text-[#0077B6] hover:underline"
                       >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        Lupa Kata Sandi?
                       </button>
                     </div>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-[#0077B6]/10 to-[#00B4D8]/10 rounded-xl blur opacity-20"></div>
+                      <div className="relative flex items-center">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          minLength={6}
+                          className="w-full pl-11 pr-12 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-[#00B4D8]/40 focus:border-[#00B4D8] outline-none transition-all bg-gray-700 text-white placeholder-gray-400 backdrop-blur"
+                          placeholder="Masukkan kata sandi Anda"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-100 transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {/* Submit Button with Gradient */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="relative w-full py-3.5 overflow-hidden rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#03045E] via-[#0077B6] to-[#00B4D8]"></div>
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#0077B6] via-[#00B4D8] to-[#03045E] opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  <div className="relative flex items-center justify-center gap-2 text-white font-semibold">
-                    {loading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <>
-                        <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
-                        <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
-                      </>
-                    )}
-                  </div>
-                  {/* Shimmer Effect */}
-                  <div className="absolute top-0 -left-100 w-48 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                </button>
-              </form>
-              {/* Toggle Sign In / Sign Up */}
-
-              <div className="mt-6 text-center animate-slide-up" style={{ animationDelay: '0.5s' }}>
-                <p className="text-sm text-gray-600">
-                  {isSignUp ? 'Already have an account?' : "Don't have an account?"}
+                  {/* Submit Button with Gradient */}
                   <button
-                    onClick={() => {
-                      setIsSignUp(!isSignUp);
-                      setFormVisible(false);
-                      setTimeout(() => setFormVisible(true), 100);
-                    }}
-                    className="ml-1.5 text-[#0077B6] hover:text-[#00B4D8] font-semibold transition-colors"
+                    type="submit"
+                    disabled={loading}
+                    className="relative w-full py-3.5 overflow-hidden rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
                   >
-                    {isSignUp ? 'Sign In' : 'Create Account'}
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#03045E] via-[#0077B6] to-[#00B4D8]"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#0077B6] via-[#00B4D8] to-[#03045E] opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <div className="relative flex items-center justify-center gap-2 text-white font-semibold">
+                      {loading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <span>Masuk</span>
+                          <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                          </svg>
+                        </>
+                      )}
+                    </div>
+                    {/* Shimmer Effect */}
+                    <div className="absolute top-0 -left-100 w-48 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
                   </button>
-                </p>
-              </div>
+                </form>
+              )}
             </div>
           </div>
 
           {/* Footer */}
           <p className="text-center text-xs text-white/60 mt-6">
-            &copy; {new Date().getFullYear()} Pertamina Trans Kontinental. All rights reserved.
+            &copy; {new Date().getFullYear()} Pertamina Trans Kontinental. Semua hak dilindungi undang-undang.
           </p>
         </div>
       </div>
