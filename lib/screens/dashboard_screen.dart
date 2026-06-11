@@ -249,12 +249,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onPressed: () => Navigator.pop(context, 'morning'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF005494),
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Column(
                     children: [
-                      Text('Shift Pagi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('06:00 - 14:00', style: TextStyle(fontSize: 12)),
+                      Text('Shift Pagi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text('06:00 - 14:00', style: TextStyle(fontSize: 12, color: Colors.white70)),
                     ],
                   ),
                 ),
@@ -265,13 +266,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context, 'afternoon'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
+                    backgroundColor: const Color(0xFF005494),
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Column(
                     children: [
-                      Text('Shift Siang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('10:00 - 18:00', style: TextStyle(fontSize: 12)),
+                      Text('Shift Siang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text('10:00 - 18:00', style: TextStyle(fontSize: 12, color: Colors.white70)),
                     ],
                   ),
                 ),
@@ -282,13 +284,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context, 'full_time'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey,
+                    backgroundColor: const Color(0xFF005494),
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Column(
                     children: [
-                      Text('Full Time', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('07:00 - 16:00', style: TextStyle(fontSize: 12)),
+                      Text('Full Time', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text('07:00 - 16:00', style: TextStyle(fontSize: 12, color: Colors.white70)),
                     ],
                   ),
                 ),

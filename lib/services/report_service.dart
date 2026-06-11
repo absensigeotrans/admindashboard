@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -11,6 +13,34 @@ class ReportService {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
+    // Fetch all selfies if they exist in parallel
+    final Map<String, Uint8List> selfieBytesMap = {};
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 3);
+
+    try {
+      await Future.wait(attendanceData.map((item) async {
+        final photoUrl = item['photo_url'] as String?;
+        if (photoUrl != null && photoUrl.isNotEmpty) {
+          try {
+            final uri = Uri.parse(photoUrl);
+            final request = await client.getUrl(uri);
+            final response = await request.close();
+            if (response.statusCode == 200) {
+              final bytes = await response.fold<List<int>>([], (p, e) => p..addAll(e));
+              selfieBytesMap[photoUrl] = Uint8List.fromList(bytes);
+            }
+          } catch (e) {
+            debugPrint('Error fetching selfie: $e');
+          }
+        }
+      }));
+    } catch (e) {
+      debugPrint('Error in parallel selfie fetching: $e');
+    } finally {
+      client.close();
+    }
+
     final pdf = pw.Document();
     
     // Format Date Range for Title
@@ -64,39 +94,116 @@ class ReportService {
             ),
             pw.SizedBox(height: 20),
 
-             // Attendance Table
-              pw.TableHelper.fromTextArray(
-                headers: ['Tanggal', 'Check-In', 'Check-Out', 'Status Kerja', 'Lembur', 'Validitas'],
-                 data: attendanceData.map((item) {
-                   // Parse as UTC time (as stored in database) and convert to WIB (UTC+7)
-                   final checkInUtc = DateTime.parse(item['check_in_time']).toUtc();
-                   final checkInWib = checkInUtc.add(const Duration(hours: 7));
-                   final checkOutWib = item['check_out_time'] != null 
-                       ? DateTime.parse(item['check_out_time']).toUtc().add(const Duration(hours: 7)) 
-                       : null;
-                   final overtime = (item['overtime_minutes'] as num?)?.toInt() ?? 0;
-                  
-                   return [
-                     DateFormat('dd MMM yyyy').format(checkInWib),
-                     DateFormat('HH:mm').format(checkInWib),
-                     checkOutWib != null ? DateFormat('HH:mm').format(checkOutWib) : '-',
-                     item['work_status'] ?? '-',
-                     overtime > 0 ? '$overtime menit' : '-',
-                     item['is_mocked'] == true ? 'Fake GPS' : 'Valid',
-                   ];
-                 }).toList(),
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                cellAlignment: pw.Alignment.centerLeft,
-                columnWidths: {
-                  0: const pw.FlexColumnWidth(2),
-                  1: const pw.FlexColumnWidth(1.5),
-                  2: const pw.FlexColumnWidth(1.5),
-                  3: const pw.FlexColumnWidth(1.5),
-                  4: const pw.FlexColumnWidth(1.5),
-                  5: const pw.FlexColumnWidth(1.5),
-                },
-              ),
+            // Attendance Table
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+              columnWidths: const {
+                0: pw.FlexColumnWidth(2),    // Tanggal
+                1: pw.FlexColumnWidth(1.2),  // Check-In
+                2: pw.FlexColumnWidth(1.2),  // Check-Out
+                3: pw.FlexColumnWidth(1.2),  // Status Kerja
+                4: pw.FlexColumnWidth(1.2),  // Lembur
+                5: pw.FlexColumnWidth(1.2),  // Validitas
+                6: pw.FlexColumnWidth(1.5),  // Foto Bukti
+              },
+              children: [
+                // Table Header
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Tanggal', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Check-In', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Check-Out', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Status Kerja', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Lembur', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Validitas', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('Foto Bukti', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ),
+                  ],
+                ),
+                // Table Rows
+                ...attendanceData.map((item) {
+                  final checkInUtc = DateTime.parse(item['check_in_time']).toUtc();
+                  final checkInWib = checkInUtc.add(const Duration(hours: 7));
+                  final checkOutWib = item['check_out_time'] != null
+                      ? DateTime.parse(item['check_out_time']).toUtc().add(const Duration(hours: 7))
+                      : null;
+                  final overtime = (item['overtime_minutes'] as num?)?.toInt() ?? 0;
+                  final photoUrl = item['photo_url'] as String?;
+
+                  pw.Widget photoWidget;
+                  if (photoUrl != null && photoUrl.isNotEmpty && selfieBytesMap.containsKey(photoUrl)) {
+                    photoWidget = pw.Container(
+                      width: 40,
+                      height: 50,
+                      child: pw.Image(
+                        pw.MemoryImage(selfieBytesMap[photoUrl]!),
+                        fit: pw.BoxFit.cover,
+                      ),
+                    );
+                  } else {
+                    photoWidget = pw.Text('-', style: const pw.TextStyle(fontSize: 9));
+                  }
+
+                  return pw.TableRow(
+                    verticalAlignment: pw.TableCellVerticalAlignment.middle,
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(DateFormat('dd MMM yyyy').format(checkInWib), style: const pw.TextStyle(fontSize: 9)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(DateFormat('HH:mm').format(checkInWib), style: const pw.TextStyle(fontSize: 9)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(
+                          checkOutWib != null ? DateFormat('HH:mm').format(checkOutWib) : '-',
+                          style: const pw.TextStyle(fontSize: 9),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(item['work_status'] ?? '-', style: const pw.TextStyle(fontSize: 9)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(overtime > 0 ? '$overtime menit' : '-', style: const pw.TextStyle(fontSize: 9)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(item['is_mocked'] == true ? 'Fake GPS' : 'Valid', style: const pw.TextStyle(fontSize: 9)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Center(child: photoWidget),
+                      ),
+                    ],
+                  );
+                }),
+              ],
+            ),
 
             // Overtime Summary
             pw.SizedBox(height: 12),

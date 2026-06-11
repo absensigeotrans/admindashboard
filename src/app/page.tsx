@@ -9,10 +9,21 @@ export default async function Home() {
     redirect('/login');
   }
 
-  const role = user.user_metadata?.role;
-  if (role === 'admin') {
+  // Fetch role from profiles table (source of truth)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  const userRole = profile?.role || user.user_metadata?.role;
+
+  if (userRole === 'admin') {
     redirect('/admin');
-  } else {
+  } else if (userRole === 'viewer') {
     redirect('/dashboard');
+  } else {
+    redirect('/employee');
   }
 }
+

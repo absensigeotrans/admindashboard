@@ -17,6 +17,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "GeoAttend Pro - Pertamina Trans Kontinental",
   description: "Geofencing-based attendance system for Pertamina Trans Kontinental",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "GeoAttend",
+  },
 };
 
 import { createClient } from "@/utils/supabase/server";
@@ -44,12 +50,35 @@ export default async function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <meta name="theme-color" content="#005494" />
+        <link rel="apple-touch-icon" href="/app-icon-1024.png" />
+      </head>
       <body className="min-h-full flex flex-col bg-gray-50">
         <BrandSplashScreen />
         <AuthProvider initialUser={user} initialProfile={profile}>
           {children}
         </AuthProvider>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    function(reg) {
+                      console.log('SW registered:', reg.scope);
+                    },
+                    function(err) {
+                      console.log('SW registration failed:', err);
+                    }
+                  );
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );
 }
+

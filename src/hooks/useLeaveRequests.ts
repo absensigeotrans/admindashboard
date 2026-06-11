@@ -12,8 +12,8 @@ export interface LeaveRequest {
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   created_at: string;
-  processed_by?: string;
-  processed_at?: string;
+  approved_by?: string;
+  approved_at?: string;
 }
 
 interface LeaveInsert {
@@ -57,8 +57,8 @@ export function useLeaveRequests() {
         reason: r.reason || '',
         status: r.status,
         created_at: r.created_at,
-        processed_by: r.processed_by,
-        processed_at: r.processed_at,
+        approved_by: r.approved_by,
+        approved_at: r.approved_at,
       }));
 
       setRequests(mapped);
@@ -76,8 +76,8 @@ export function useLeaveRequests() {
         .from('leave_requests')
         .update({
           status: 'approved',
-          processed_by: user.user?.id,
-          processed_at: new Date().toISOString(),
+          approved_by: user.user?.id,
+          approved_at: new Date().toISOString(),
         })
         .eq('id', id);
 
@@ -85,7 +85,7 @@ export function useLeaveRequests() {
       setRequests((prev) =>
         prev.map((r) =>
           r.id === id
-            ? { ...r, status: 'approved', processed_at: new Date().toISOString() }
+            ? { ...r, status: 'approved', approved_at: new Date().toISOString() }
             : r
         )
       );
@@ -102,8 +102,8 @@ export function useLeaveRequests() {
         .from('leave_requests')
         .update({
           status: 'rejected',
-          processed_by: user.user?.id,
-          processed_at: new Date().toISOString(),
+          approved_by: user.user?.id,
+          approved_at: new Date().toISOString(),
         })
         .eq('id', id);
 
@@ -111,7 +111,7 @@ export function useLeaveRequests() {
       setRequests((prev) =>
         prev.map((r) =>
           r.id === id
-            ? { ...r, status: 'rejected', processed_at: new Date().toISOString() }
+            ? { ...r, status: 'rejected', approved_at: new Date().toISOString() }
             : r
         )
       );

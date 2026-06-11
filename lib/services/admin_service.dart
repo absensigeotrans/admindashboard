@@ -58,7 +58,8 @@ class AdminService extends ChangeNotifier {
         is_mocked,
         status,
         overtime_minutes,
-        work_duration_minutes
+        work_duration_minutes,
+        photo_url
       '''
       );
 
