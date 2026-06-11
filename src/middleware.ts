@@ -3,7 +3,7 @@ import { updateSession } from '@/utils/supabase/middleware';
 
 export const runtime = 'experimental-edge';
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request);
   const path = request.nextUrl.pathname;
 
@@ -41,6 +41,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * - images (public images)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|images|.*\\..*).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|images|.*\..*).*)',
   ],
 };
