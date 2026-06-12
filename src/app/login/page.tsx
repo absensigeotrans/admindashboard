@@ -19,6 +19,9 @@ export default function LoginPage() {
   const [formVisible, setFormVisible] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotPassword, setForgotPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setFormVisible(true), 300);
@@ -53,20 +56,35 @@ export default function LoginPage() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (forgotPassword.length < 8) {
+      setToast({ message: 'Kata sandi baru minimal 8 karakter!', type: 'error' });
+      return;
+    }
+    if (forgotPassword !== forgotConfirmPassword) {
+      setToast({ message: 'Konfirmasi kata sandi tidak cocok!', type: 'error' });
+      return;
+    }
+
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const { data, error } = await supabase.rpc('submit_forgot_password_request', {
+        p_email: forgotEmail.toLowerCase().trim(),
+        p_new_password: forgotPassword,
       });
+
       if (error) {
         setToast({ message: error.message, type: 'error' });
+      } else if (data && !(data as any).success) {
+        setToast({ message: (data as any).error || 'Gagal mengirim pengajuan', type: 'error' });
       } else {
-        setToast({ message: 'Tautan reset kata sandi telah dikirim ke email Anda!', type: 'success' });
+        setToast({ message: 'Pengajuan reset kata sandi berhasil dikirim ke Admin. Hubungi Admin untuk persetujuan.', type: 'success' });
         setIsForgotPassword(false);
         setForgotEmail('');
+        setForgotPassword('');
+        setForgotConfirmPassword('');
       }
     } catch (err: any) {
-      setToast({ message: err?.message || 'Gagal mengirim email reset', type: 'error' });
+      setToast({ message: err?.message || 'Gagal mengirim pengajuan', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -197,7 +215,7 @@ export default function LoginPage() {
                 </h2>
                 <p className="text-sm sm:text-base text-gray-500 mt-2">
                   {isForgotPassword
-                    ? 'Masukkan alamat email Anda untuk menerima tautan atur ulang kata sandi'
+                    ? 'Ajukan permohonan reset kata sandi langsung ke Admin'
                     : 'Masuk ke akun Anda'}
                 </p>
               </div>
@@ -224,6 +242,55 @@ export default function LoginPage() {
                     </div>
                   </div>
 
+                  <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+                    <label className="block text-sm font-medium text-gray-600 mb-1.5">
+                      Kata Sandi Baru
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-[#0077B6]/10 to-[#00B4D8]/10 rounded-xl blur opacity-20"></div>
+                      <div className="relative flex items-center">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
+                        <input
+                          type={showForgotPassword ? 'text' : 'password'}
+                          value={forgotPassword}
+                          onChange={(e) => setForgotPassword(e.target.value)}
+                          required
+                          minLength={8}
+                          className="w-full pl-11 pr-12 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-[#00B4D8]/40 focus:border-[#00B4D8] outline-none transition-all bg-gray-700 text-white placeholder-gray-400 backdrop-blur"
+                          placeholder="Minimal 8 karakter"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotPassword(!showForgotPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-100 transition-colors"
+                        >
+                          {showForgotPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
+                    <label className="block text-sm font-medium text-gray-600 mb-1.5">
+                      Konfirmasi Kata Sandi Baru
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-[#0077B6]/10 to-[#00B4D8]/10 rounded-xl blur opacity-20"></div>
+                      <div className="relative flex items-center">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
+                        <input
+                          type={showForgotPassword ? 'text' : 'password'}
+                          value={forgotConfirmPassword}
+                          onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                          required
+                          minLength={8}
+                          className="w-full pl-11 pr-12 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-[#00B4D8]/40 focus:border-[#00B4D8] outline-none transition-all bg-gray-700 text-white placeholder-gray-400 backdrop-blur"
+                          placeholder="Ulangi kata sandi baru"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Submit Button */}
                   <button
                     type="submit"
@@ -236,7 +303,7 @@ export default function LoginPage() {
                       {loading ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
                       ) : (
-                        <span>Kirim Tautan Atur Ulang</span>
+                        <span>Kirim Pengajuan Reset</span>
                       )}
                     </div>
                   </button>

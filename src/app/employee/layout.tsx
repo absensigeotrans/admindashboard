@@ -39,7 +39,6 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     { label: 'Riwayat', href: '/employee/history', icon: History },
     { label: 'Cuti / Izin', href: '/employee/leave', icon: Calendar },
     ...(isDriver ? [{ label: 'Ganti Role', href: '/employee/role-request', icon: ArrowLeftRight }] : []),
-    { label: 'Ganti Password', href: '/employee/password-request', icon: Lock },
     { label: 'Profil', href: '/employee/profile', icon: User },
   ];
 

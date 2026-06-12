@@ -9,7 +9,7 @@ export async function middleware(request: NextRequest) {
 
   // 1. If not authenticated, redirect to /login
   if (!user) {
-    if (path !== '/login' && path !== '/reset-password') {
+    if (path !== '/login') {
       return NextResponse.redirect(new URL('/login', request.url));
     }
     return supabaseResponse;
