@@ -13,6 +13,7 @@ export interface Profile {
   today_shift_type?: ShiftType | null;
   employee_id?: string;
   nik?: string;
+  registered_password?: string;
   created_at: string;
   updated_at: string;
 }
