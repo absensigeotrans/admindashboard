@@ -14,13 +14,13 @@ import { FormInput, FormSelect } from '@/components/ui/FormInput';
 import { toast } from '@/components/ui/Toast';
 import { Profile, UserRole, ShiftType } from '@/types';
 import { getWIBDate, formatWIBDateDisplay } from '@/lib/timezone';
-import { Users, Building2, UserCog, Download, Clock, UserPlus, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Users, Building2, UserCog, Clock, UserPlus, Trash2, Eye, EyeOff, FileSpreadsheet } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
 export default function EmployeesPage() {
   const {
-    employees, setEmployees, loading, fetchEmployees, updateEmployee,
+    employees, setEmployees, loading, fetchEmployees, fetchAllEmployees, updateEmployee,
     toggleRole, deactivateEmployee, activateEmployee, createEmployee,
     deleteEmployee,
   } = useEmployees();
@@ -29,6 +29,15 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [exportLoading, setExportLoading] = useState(false);
+
+  const [stats, setStats] = useState({
+    viewers: 0,
+    drivers: 0,
+    juruParkir: 0,
+    ob: 0,
+    totalActive: 0
+  });
 
   // Edit modal
   const [editEmployee, setEditEmployee] = useState<Profile | null>(null);
@@ -68,6 +77,38 @@ export default function EmployeesPage() {
   const load = useCallback(async (s = search, p = page) => {
     const result = await fetchEmployees(p, PAGE_SIZE, s);
     setTotal(result.count);
+
+    // Fetch counts database-wide
+    try {
+      let statsQuery = supabase
+        .from('profiles')
+        .select('role')
+        .not('role', 'eq', 'admin');
+      
+      if (s) {
+        statsQuery = statsQuery.or(`full_name.ilike.%${s}%,email.ilike.%${s}%`);
+      }
+
+      const { data: roleData, error: roleError } = await statsQuery;
+      if (!roleError && roleData) {
+        const counts = roleData.reduce((acc, curr) => {
+          const r = curr.role;
+          if (r === 'viewer') acc.viewers++;
+          else if (r === 'driver_bebas' || r === 'driver_kantor') acc.drivers++;
+          else if (r === 'juru_parkir') acc.juruParkir++;
+          else if (r === 'ob') acc.ob++;
+
+          if (r !== 'inactive') {
+            acc.totalActive++;
+          }
+          return acc;
+        }, { viewers: 0, drivers: 0, juruParkir: 0, ob: 0, totalActive: 0 });
+
+        setStats(counts);
+      }
+    } catch (err) {
+      console.error('Error fetching role counts:', err);
+    }
   }, [fetchEmployees]);
 
   useEffect(() => {
@@ -236,31 +277,142 @@ export default function EmployeesPage() {
     }
   };
 
-  // CSV Export
-  const exportCSV = () => {
-    const headers = ['Name', 'Email', 'Role', 'Shift', 'Status', 'Created'];
-    const rows = employees.map((e) => {
-      const activeShift = e.today_shift_type || e.shift_type;
-      return [
-        e.full_name, e.email, e.role, 
-        activeShift === 'morning' ? 'Pagi' : activeShift === 'afternoon' ? 'Siang' : activeShift === 'full_time' ? 'Full Time' : activeShift === 'non_shifting' ? 'Non-Shifting' : '—',
-        'active', e.created_at,
+  // Excel Export
+  const exportToExcel = async () => {
+    setExportLoading(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'Admin';
+      const ws = wb.addWorksheet('Daftar Karyawan');
+
+      ws.columns = [
+        { width: 6 },   // No
+        { width: 25 },  // Nama Lengkap
+        { width: 28 },  // Email
+        { width: 18 },  // Role
+        { width: 22 },  // Shift Utama
+        { width: 22 },  // Shift Hari Ini
+        { width: 22 },  // Tanggal Terdaftar
       ];
-    });
-    const csv = [headers, ...rows]
-      .map((r) => r.map((c) => `"${c}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `employees_${getWIBDate()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('CSV exported');
+
+      const borderThin = {
+        top: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+        left: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+        bottom: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+        right: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+      };
+
+      const r1 = ws.addRow(['Daftar Karyawan GeoAttend']);
+      ws.mergeCells(1, 1, 1, 7);
+      r1.font = { bold: true, size: 14, color: { argb: 'FFFFFF' } };
+      r1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
+      r1.alignment = { vertical: 'middle', horizontal: 'left' };
+      r1.height = 32;
+
+      const r2 = ws.addRow([`Diunduh pada: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`]);
+      ws.mergeCells(2, 1, 2, 7);
+      r2.font = { size: 10, italic: true, color: { argb: '6B7280' } };
+      r2.height = 20;
+
+      ws.addRow([]); // Spacer
+
+      const headerRow = ws.addRow([
+        'No', 'Nama Lengkap', 'Email', 'Role', 'Shift Utama', 'Shift Hari Ini', 'Tanggal Terdaftar'
+      ]);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFF' }, size: 11 };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
+      headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      headerRow.height = 24;
+      headerRow.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' },
+        };
+      });
+
+      // Ambil seluruh karyawan non-admin database-wide
+      const allEmployees = await fetchAllEmployees(search);
+
+      const roleDisplay: Record<string, string> = {
+        juru_parkir: 'Juru Parkir',
+        driver_bebas: 'Driver (Bebas)',
+        driver_kantor: 'Driver (Kantor)',
+        ob: 'OB',
+        viewer: 'Viewer',
+        inactive: 'Inactive',
+      };
+
+      const shiftDisplay = (s: string | null | undefined) => {
+        if (!s) return '—';
+        const map: Record<string, string> = {
+          morning: 'Pagi (06:00-14:00)',
+          afternoon: 'Siang (10:00-18:00)',
+          full_time: 'Full Time (07:00-16:00)',
+          non_shifting: 'Non-Shifting',
+        };
+        return map[s] || s;
+      };
+
+      allEmployees.forEach((emp, index) => {
+        const row = ws.addRow([
+          index + 1,
+          emp.full_name,
+          emp.email,
+          roleDisplay[emp.role] || emp.role,
+          shiftDisplay(emp.shift_type),
+          shiftDisplay(emp.today_shift_type),
+          formatWIBDateDisplay(emp.created_at),
+        ]);
+
+        const roleColors: Record<string, { bg: string; fg: string }> = {
+          viewer: { bg: 'F3F4F6', fg: '374151' },
+          driver_bebas: { bg: 'DCFCE7', fg: '166534' },
+          driver_kantor: { bg: 'DCFCE7', fg: '166534' },
+          juru_parkir: { bg: 'DCFCE7', fg: '166534' },
+          ob: { bg: 'FEF3C7', fg: '92400E' },
+          inactive: { bg: 'FEE2E2', fg: '991B1B' },
+        };
+        const colors = roleColors[emp.role] || { bg: 'F3F4F6', fg: '374151' };
+        row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.bg } };
+        row.getCell(4).font = { color: { argb: colors.fg }, bold: true };
+
+        row.eachCell((cell) => {
+          cell.border = borderThin;
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+
+        row.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+        row.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
+
+        row.height = 20;
+      });
+
+      ws.addRow([]);
+      const srRow = ws.addRow([`Total: ${allEmployees.length} karyawan`]);
+      ws.mergeCells(srRow.number, 1, srRow.number, 7);
+      srRow.font = { italic: true, size: 10, color: { argb: '6B7280' } };
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `karyawan_${getWIBDate()}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Berhasil mengekspor ${allEmployees.length} karyawan`);
+    } catch (err) {
+      console.error('Gagal mengekspor Excel:', err);
+      toast.error('Gagal mengekspor data ke Excel');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
-  const activeEmployees = employees.filter((e) => e.role !== 'inactive' && e.role !== 'admin');
+  const activeEmployees = employees.filter((e) => e.role !== 'admin');
 
   return (
     <div className="space-y-5">
@@ -272,8 +424,8 @@ export default function EmployeesPage() {
           placeholder="Search name, email..."
           className="flex-1"
         />
-        <Button variant="secondary" onClick={exportCSV}>
-          <Download className="w-4 h-4" /> Export CSV
+        <Button variant="secondary" onClick={exportToExcel} loading={exportLoading}>
+          <FileSpreadsheet className="w-4 h-4" /> Ekspor Excel
         </Button>
         <Button variant="primary" onClick={openAddModal}>
           <UserPlus className="w-4 h-4" /> Tambah Karyawan
@@ -282,11 +434,11 @@ export default function EmployeesPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatsCard icon={<UserCog className="w-6 h-6" />} value={employees.filter(e => e.role === 'viewer').length} label="Viewers" color="gray" />
-        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'driver_bebas' || e.role === 'driver_kantor').length} label="Drivers" color="blue" />
-        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'juru_parkir').length} label="Juru Parkir" color="green" />
-        <StatsCard icon={<Users className="w-6 h-6" />} value={employees.filter(e => e.role === 'ob').length} label="OB" color="orange" />
-        <StatsCard icon={<Clock className="w-6 h-6" />} value={activeEmployees.length} label="Total Active" color="purple" />
+        <StatsCard icon={<UserCog className="w-6 h-6" />} value={stats.viewers} label="Viewers" color="gray" />
+        <StatsCard icon={<Users className="w-6 h-6" />} value={stats.drivers} label="Drivers" color="blue" />
+        <StatsCard icon={<Users className="w-6 h-6" />} value={stats.juruParkir} label="Juru Parkir" color="green" />
+        <StatsCard icon={<Users className="w-6 h-6" />} value={stats.ob} label="OB" color="orange" />
+        <StatsCard icon={<Clock className="w-6 h-6" />} value={stats.totalActive} label="Total Active" color="purple" />
       </div>
 
       {/* Table */}

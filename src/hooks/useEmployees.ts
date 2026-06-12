@@ -67,6 +67,7 @@ export function useEmployees() {
       let query = supabase
         .from('profiles')
         .select('*', { count: 'exact' })
+        .not('role', 'eq', 'admin')
         .order('created_at', { ascending: false })
         .range((page - 1) * limit, page * limit - 1);
 
@@ -187,12 +188,36 @@ export function useEmployees() {
     }
   }, [fetchEmployees]);
 
+  const fetchAllEmployees = useCallback(async (search = '') => {
+    try {
+      let query = supabase
+        .from('profiles')
+        .select('*')
+        .not('role', 'eq', 'admin')
+        .order('created_at', { ascending: false });
+
+      if (search) {
+        query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      }
+
+      const { data, error: fetchError } = await query;
+      if (fetchError) throw fetchError;
+
+      const enriched = await enrichEmployeesWithTodayShift((data as Profile[]) || []);
+      return enriched;
+    } catch (err) {
+      console.error('Error fetching all employees:', err);
+      return [];
+    }
+  }, []);
+
   return {
     employees,
     setEmployees,
     loading,
     error,
     fetchEmployees,
+    fetchAllEmployees,
     updateEmployee,
     toggleRole,
     deactivateEmployee,
