@@ -38,6 +38,7 @@ const navItems = [
   { href: '/admin/monthly-recap', icon: CalendarDays, label: 'Rekap Bulanan' },
   { href: '/admin/attendance-rate', icon: BarChart3, label: 'Tingkat Kehadiran' },
   { href: '/admin/leave-requests', icon: CalendarX, label: 'Pengajuan Cuti', badgeKey: 'pendingLeaves' },
+  { href: '/admin/driver-requests', icon: UserCog, label: 'Pengajuan Driver', badgeKey: 'pendingDriverRequests' },
   { href: '/admin/monitoring', icon: Radio, label: 'Pemantauan Langsung' },
   { href: '/admin/anomalies', icon: ShieldAlert, label: 'Deteksi Anomali', badgeKey: 'anomalies' },
   { href: '/admin/photos', icon: Image, label: 'Foto Selfie' },
@@ -51,6 +52,7 @@ interface SidebarStats {
   outside: number;
   suspicious: number;
   pendingLeaves: number;
+  pendingDriverRequests: number;
   anomalies: number;
 }
 
@@ -64,7 +66,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { signOut } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [stats, setStats] = useState<SidebarStats>({ present: 0, late: 0, outside: 0, suspicious: 0, pendingLeaves: 0, anomalies: 0 });
+  const [stats, setStats] = useState<SidebarStats>({ present: 0, late: 0, outside: 0, suspicious: 0, pendingLeaves: 0, pendingDriverRequests: 0, anomalies: 0 });
   const [loading, setLoading] = useState(true);
 
   // Update time every minute
@@ -93,6 +95,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           .select('*', { count: 'exact', head: true })
           .eq('status', 'pending');
 
+        // Fetch pending driver role requests count
+        const { count: pendingDriverRequests } = await supabase
+          .from('driver_role_requests')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending');
+
         // Fetch anomaly count
         const { count: anomalyCount } = await supabase
           .from('attendance')
@@ -111,10 +119,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             outside,
             suspicious,
             pendingLeaves: pendingLeaves || 0,
+            pendingDriverRequests: pendingDriverRequests || 0,
             anomalies: anomalyCount || 0,
           });
         } else {
-          setStats((prev) => ({ ...prev, pendingLeaves: pendingLeaves || 0, anomalies: anomalyCount || 0 }));
+          setStats((prev) => ({ 
+            ...prev, 
+            pendingLeaves: pendingLeaves || 0, 
+            pendingDriverRequests: pendingDriverRequests || 0,
+            anomalies: anomalyCount || 0 
+          }));
         }
       } catch (err) {
         console.error('Error fetching sidebar stats:', err);

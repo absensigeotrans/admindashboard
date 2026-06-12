@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { ToastContainer } from '@/components/ui/Toast';
-import { Clock, History, Calendar, User, ShieldAlert } from 'lucide-react';
+import { Clock, History, Calendar, User, ShieldAlert, ArrowLeftRight } from 'lucide-react';
 import Link from 'next/link';
 
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
@@ -31,12 +31,14 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
 
   // Verify that the user is actually an employee, not an admin/viewer.
   // Wait, if an admin wants to test it, let them. So we just show a warning if role is not expected, or let them in.
-  const isEmployee = profile && ['juru_parkir', 'driver', 'ob', 'driver_bebas'].includes(profile.role);
+  const isEmployee = profile && ['juru_parkir', 'driver', 'ob', 'driver_bebas', 'driver_kantor'].includes(profile.role);
+  const isDriver = profile && (profile.role === 'driver_bebas' || profile.role === 'driver_kantor');
 
   const navItems = [
     { label: 'Absen', href: '/employee', icon: Clock },
     { label: 'Riwayat', href: '/employee/history', icon: History },
     { label: 'Cuti / Izin', href: '/employee/leave', icon: Calendar },
+    ...(isDriver ? [{ label: 'Ganti Role', href: '/employee/role-request', icon: ArrowLeftRight }] : []),
     { label: 'Profil', href: '/employee/profile', icon: User },
   ];
 
