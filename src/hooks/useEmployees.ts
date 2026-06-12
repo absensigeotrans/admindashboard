@@ -6,6 +6,7 @@ interface EmployeeUpdate {
   full_name?: string;
   role?: UserRole;
   shift_type?: ShiftType | null;
+  password?: string;
 }
 
 interface CreateEmployeeData {

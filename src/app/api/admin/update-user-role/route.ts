@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { user_id, role, full_name, shift_type } = body;
+    const { user_id, role, full_name, shift_type, password } = body;
 
     if (!user_id) {
       return NextResponse.json(
@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
     if (role !== undefined) profileUpdates.role = role;
     if (full_name !== undefined) profileUpdates.full_name = full_name;
     if (shift_type !== undefined) profileUpdates.shift_type = shift_type;
+    if (password !== undefined && password !== '') {
+      profileUpdates.registered_password = password;
+    }
 
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -61,11 +64,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Sync role to auth.users if role changed
-    if (role) {
+    // 4. Update auth.users if role or password changed
+    const authUpdates: any = {};
+    const userMetadata: any = {};
+    if (role) userMetadata.role = role;
+    if (password !== undefined && password !== '') {
+      authUpdates.password = password;
+      userMetadata.registered_password = password;
+    }
+    if (Object.keys(userMetadata).length > 0) {
+      authUpdates.user_metadata = userMetadata;
+    }
+
+    if (Object.keys(authUpdates).length > 0) {
       const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
         user_id,
-        { user_metadata: { role } }
+        authUpdates
       );
 
       if (authError) {
@@ -79,7 +93,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json(
-      { error: err?.message || 'Gagal update role' },
+      { error: err?.message || 'Gagal update data karyawan' },
       { status: 500 }
     );
   }

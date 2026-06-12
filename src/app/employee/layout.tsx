@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { ToastContainer } from '@/components/ui/Toast';
-import { Clock, History, Calendar, User, ShieldAlert, ArrowLeftRight } from 'lucide-react';
+import { Clock, History, Calendar, User, ShieldAlert, ArrowLeftRight, Lock } from 'lucide-react';
 import Link from 'next/link';
 
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
@@ -39,6 +39,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     { label: 'Riwayat', href: '/employee/history', icon: History },
     { label: 'Cuti / Izin', href: '/employee/leave', icon: Calendar },
     ...(isDriver ? [{ label: 'Ganti Role', href: '/employee/role-request', icon: ArrowLeftRight }] : []),
+    { label: 'Ganti Password', href: '/employee/password-request', icon: Lock },
     { label: 'Profil', href: '/employee/profile', icon: User },
   ];
 

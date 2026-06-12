@@ -35,15 +35,11 @@ export default function EmployeesPage() {
   const [editFullName, setEditFullName] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('viewer');
   const [editShift, setEditShift] = useState<ShiftType | ''>('');
+  const [editPassword, setEditPassword] = useState('');
   const [saving, setSaving] = useState(false);
   
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [showDetailPassword, setShowDetailPassword] = useState(false);
-  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
-
-  const togglePasswordVisibility = (id: string) => {
-    setVisiblePasswords((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
   
   // Delete confirm modal
   const [deleteConfirmEmployee, setDeleteConfirmEmployee] = useState<Profile | null>(null);
@@ -92,6 +88,7 @@ export default function EmployeesPage() {
     const currentRole = (emp.role as string) === 'employee' ? 'viewer' : emp.role;
     setEditRole(currentRole === 'inactive' ? 'viewer' : currentRole as UserRole);
     setEditShift(emp.shift_type || '');
+    setEditPassword('');
     setSaving(false);
   };
 
@@ -105,6 +102,7 @@ export default function EmployeesPage() {
       full_name: editFullName,
       role: editRole,
       shift_type: editShift || null,
+      registered_password: editPassword || editEmployee.registered_password,
     };
 
     // Update state immediately
@@ -118,6 +116,7 @@ export default function EmployeesPage() {
       full_name: editFullName,
       role: editRole,
       shift_type: editShift || null,
+      password: editPassword || undefined,
     });
 
     if (result.success) {
@@ -300,20 +299,19 @@ export default function EmployeesPage() {
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Role</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Shift</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Password</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center">
+                  <td colSpan={5} className="px-4 py-12 text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto" />
                   </td>
                 </tr>
               ) : activeEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No employees found</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">No employees found</td>
                 </tr>
               ) : (
                 activeEmployees.map((emp) => (
@@ -367,22 +365,6 @@ export default function EmployeesPage() {
                           <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded leading-none">
                             Hari Ini
                           </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm font-mono text-gray-600">
-                      <div className="flex items-center gap-1.5">
-                        <span className="select-all">
-                          {visiblePasswords[emp.id] ? emp.registered_password || '—' : '••••••••'}
-                        </span>
-                        {emp.registered_password && (
-                          <button
-                            onClick={() => togglePasswordVisibility(emp.id)}
-                            className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
-                            title={visiblePasswords[emp.id] ? "Sembunyikan password" : "Tampilkan password"}
-                          >
-                            {visiblePasswords[emp.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
                         )}
                       </div>
                     </td>
@@ -465,6 +447,13 @@ export default function EmployeesPage() {
                 )}
               </div>
             </div>
+            <FormInput
+              label="Ganti Password Baru (Opsional)"
+              type="password"
+              value={editPassword}
+              onChange={(e) => setEditPassword(e.target.value)}
+              placeholder="Masukkan password baru untuk mengganti"
+            />
             <div className="flex gap-2 pt-2">
               <Button onClick={handleSaveEdit} className="flex-1">
                 Save Changes
