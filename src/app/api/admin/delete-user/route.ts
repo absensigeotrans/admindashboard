@@ -1,10 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createClient } from '@/utils/supabase/server';
 
 export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. Authenticate user
+    const supabase = await createClient();
+    const { data: { user }, error: userFetchError } = await supabase.auth.getUser();
+
+    if (userFetchError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Harap login terlebih dahulu' },
+        { status: 401 }
+      );
+    }
+
+    // 2. Check if user is admin
+    const { data: profileCheck, error: authCheckError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (authCheckError || !profileCheck || profileCheck.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Forbidden: Hanya Admin yang dapat menghapus akun karyawan' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { userId } = body;
 
