@@ -352,7 +352,7 @@ export default function AdminsPage() {
             />
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-gray-700">Password Terdaftar</label>
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border rounded-lg text-sm text-gray-905 font-mono select-all">
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border rounded-lg text-sm text-black font-mono select-all">
                 <span>{showEditPassword ? (editAdmin as any).registered_password || '—' : '••••••••'}</span>
                 {(editAdmin as any).registered_password && (
                   <button
