@@ -19,6 +19,7 @@ class NotificationService {
   static const _channelSync = 'sync_channel';
   static const _channelLeave = 'leave_channel';
   static const _channelReminder = 'reminder_channel';
+  static const _channelInbox = 'inbox_channel';
 
   // ─── Initialize ───
 
@@ -92,6 +93,16 @@ class NotificationService {
           'Pengingat',
           description: 'Pengingat absensi harian',
           importance: Importance.defaultImportance,
+        ),
+      );
+      await androidPlugin.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _channelInbox,
+          'Pesan & Notifikasi',
+          description: 'Notifikasi status pengajuan cuti dan driver',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
         ),
       );
     }
@@ -220,6 +231,19 @@ class NotificationService {
       title: 'ℹ️ Cuti Dibatalkan',
       body: 'Pengajuan cuti Anda telah dibatalkan.',
       importance: Importance.defaultImportance,
+    );
+  }
+
+  Future<void> showInboxNotification({
+    required String title,
+    required String body,
+  }) async {
+    await _show(
+      id: 8000 + (DateTime.now().millisecondsSinceEpoch % 1000),
+      channel: _channelInbox,
+      title: title,
+      body: body,
+      importance: Importance.max,
     );
   }
 
@@ -392,6 +416,7 @@ class NotificationService {
       case _channelSync: return 'Sinkronisasi';
       case _channelLeave: return 'Pengajuan Cuti';
       case _channelReminder: return 'Pengingat';
+      case _channelInbox: return 'Pesan & Notifikasi';
       default: return 'GeoAttend PTK';
     }
   }

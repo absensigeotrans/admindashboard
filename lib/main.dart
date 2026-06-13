@@ -10,6 +10,7 @@ import 'services/notification_service.dart';
 import 'services/office_service.dart';
 import 'services/driver_role_request_service.dart';
 import 'services/password_change_request_service.dart';
+import 'services/inbox_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/admin_screen.dart';
@@ -38,6 +39,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => OfficeService()),
         ChangeNotifierProvider(create: (_) => DriverRoleRequestService()),
         ChangeNotifierProvider(create: (_) => PasswordChangeRequestService()),
+        ChangeNotifierProvider(create: (_) => InboxService()..initialize()),
       ],
       child: const MyApp(),
     ),

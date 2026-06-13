@@ -56,13 +56,21 @@ app.*.map.json
 
 # Android (Flutter)
 android/.kotlin/
+android/.gradle/
+android/local.properties
 *.salive
+
+# iOS (Flutter)
+ios/Pods/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Flutter/flutter_export_environment.sh
+
+# geoattend-web is standalone repo for Vercel
+/geoattend-web/
 
 # IDE
 .gemini/
 
 # Presentation
 presentasi.html
-
-# Separated Web Project (now included in root)
-# /geoattend-web/

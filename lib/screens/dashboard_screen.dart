@@ -18,6 +18,8 @@ import 'history_screen.dart';
 import 'leave_request_screen.dart';
 import 'statistics_screen.dart';
 import 'profile_screen.dart';
+import 'inbox_screen.dart';
+import '../services/inbox_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -948,6 +950,7 @@ try {
     final authService = Provider.of<AuthService>(context);
     final locationService = Provider.of<LocationService>(context);
     final syncService = Provider.of<SyncService>(context);
+    final inboxService = Provider.of<InboxService>(context);
 
     final role = authService.profile?['role'] ?? '';
     final isDriver = role == 'driver_bebas';
@@ -960,6 +963,43 @@ try {
       appBar: AppBar(
         title: const Text('GeoAttend Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications),
+                tooltip: 'Pesan & Notifikasi',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const InboxScreen()),
+                ),
+              ),
+              if (inboxService.unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      '${inboxService.unreadCount}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.event_note),
             tooltip: 'Pengajuan Cuti',
