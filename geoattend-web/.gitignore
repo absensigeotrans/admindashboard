@@ -64,5 +64,5 @@ android/.kotlin/
 # Presentation
 presentasi.html
 
-# Separated Web Project (now included in root)
-# /geoattend-web/
+# Separated Web Project
+/geoattend-web/
