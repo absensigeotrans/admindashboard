@@ -11,6 +11,13 @@ import { toast } from '@/components/ui/Toast';
 import { Calendar, CheckCircle, XCircle, Plus } from 'lucide-react';
 import { useState } from 'react';
 
+const statusMap: Record<string, string> = {
+  pending: 'Menunggu',
+  approved: 'Disetujui',
+  rejected: 'Ditolak',
+  cancelled: 'Dibatalkan',
+};
+
 export default function LeaveRequestsPage() {
   const { requests, loading, fetchRequests, approveLeave, rejectLeave, createLeave } = useLeaveRequests();
   const [activeTab, setActiveTab] = useState('pending');
@@ -88,12 +95,6 @@ export default function LeaveRequestsPage() {
   };
 
   const getStatusBadge = (status: LeaveRequest['status']) => {
-    const statusMap: Record<string, string> = {
-      pending: 'Menunggu',
-      approved: 'Disetujui',
-      rejected: 'Ditolak',
-      cancelled: 'Dibatalkan',
-    };
     return (
       <Badge variant={status === 'approved' ? 'success' : status === 'rejected' ? 'danger' : status === 'cancelled' ? 'default' : 'warning'}>
         {statusMap[status] || status}
@@ -117,7 +118,7 @@ export default function LeaveRequestsPage() {
           <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-900 font-medium">Tidak ada pengajuan cuti</p>
           <p className="text-sm text-gray-500 mt-1">
-            {activeTab === 'pending' ? 'Tidak ada permohonan yang menunggu ditinjau' : `Tidak ada permohonan ${activeTab}`}
+            {activeTab === 'pending' ? 'Tidak ada permohonan yang menunggu ditinjau' : `Tidak ada permohonan ${statusMap[activeTab] || activeTab}`}
           </p>
         </div>
       ) : (
@@ -143,19 +144,19 @@ export default function LeaveRequestsPage() {
                   {/* Details */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div>
-                      <p className="text-gray-500 text-xs">Jenis Cuti</p>
+                      <p className="text-black text-xs">Jenis Cuti</p>
                       <p className="font-medium text-black">{leaveTypeLabels[req.type]}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-xs">Mulai</p>
+                      <p className="text-black text-xs">Mulai</p>
                       <p className="font-medium text-black">{new Date(req.start_date).toLocaleDateString('id-ID')}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-xs">Sampai</p>
+                      <p className="text-black text-xs">Sampai</p>
                       <p className="font-medium text-black">{new Date(req.end_date).toLocaleDateString('id-ID')}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-xs">Durasi</p>
+                      <p className="text-black text-xs">Durasi</p>
                       <p className="font-medium text-black">
                         {Math.ceil((new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / 86400000) + 1} Hari
                       </p>

@@ -129,7 +129,7 @@ export default function EmployeeLeavePage() {
       default:
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 flex items-center gap-1">
-            <Clock className="w-3 h-3" /> PENDING
+            <Clock className="w-3 h-3" /> MENUNGGU
           </span>
         );
     }
