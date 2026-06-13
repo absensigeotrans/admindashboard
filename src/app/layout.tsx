@@ -51,7 +51,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <meta name="theme-color" content="#005494" />
+        <meta name="theme-color" content="#0A57A4" />
         <link rel="apple-touch-icon" href="/app-icon-1024.png" />
       </head>
       <body className="min-h-full flex flex-col bg-gray-50">

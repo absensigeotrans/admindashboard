@@ -75,8 +75,8 @@ export default function EmployeeMap({ officeLat, officeLng, userLat, userLng, ra
           center={officeCenter}
           radius={radius}
           pathOptions={{
-            color: '#3b82f6',
-            fillColor: '#3b82f6',
+            color: '#0A57A4',
+            fillColor: '#0A57A4',
             fillOpacity: 0.15,
             weight: 2,
             dashArray: '4, 4'

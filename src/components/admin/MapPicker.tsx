@@ -152,7 +152,7 @@ export default function MapPicker({ latitude, longitude, radius, onPositionChang
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <LocationMarker lat={latitude} lng={longitude} onMove={onPositionChange} />
-          <Circle center={center} radius={radius} pathOptions={{ color: '#2563eb', fillOpacity: 0.1 }} />
+          <Circle center={center} radius={radius} pathOptions={{ color: '#0A57A4', fillOpacity: 0.1 }} />
           <FlyToCenter lat={latitude} lng={longitude} />
         </MapContainer>
       </div>

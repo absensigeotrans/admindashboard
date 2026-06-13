@@ -198,7 +198,7 @@ export default function SelfieCaptureModal({ isOpen, onClose, onCapture }: Selfi
           disabled={loading || !!error}
           className="w-18 h-18 rounded-full bg-white flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-40 disabled:scale-100 transition-all border-4 border-gray-800 hover:border-gray-700"
         >
-          <div className="w-12 h-12 rounded-full bg-[#005494] flex items-center justify-center text-white">
+          <div className="w-12 h-12 rounded-full bg-[#0A57A4] flex items-center justify-center text-white">
             <Camera className="w-6 h-6" />
           </div>
         </button>
