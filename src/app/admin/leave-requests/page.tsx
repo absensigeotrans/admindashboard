@@ -34,10 +34,10 @@ export default function LeaveRequestsPage() {
   const all = requests;
 
   const tabs = [
-    { id: 'pending', label: 'Pending', count: pending.length },
-    { id: 'approved', label: 'Approved', count: approved.length },
-    { id: 'rejected', label: 'Rejected', count: rejected.length },
-    { id: 'all', label: 'All', count: all.length },
+    { id: 'pending', label: 'Menunggu', count: pending.length },
+    { id: 'approved', label: 'Disetujui', count: approved.length },
+    { id: 'rejected', label: 'Ditolak', count: rejected.length },
+    { id: 'all', label: 'Semua', count: all.length },
   ];
 
   const getFiltered = () => {
@@ -52,24 +52,24 @@ export default function LeaveRequestsPage() {
   const handleApprove = async (id: string) => {
     const result = await approveLeave(id);
     if (result.success) {
-      toast.success('Leave request approved');
+      toast.success('Permohonan cuti disetujui');
     } else {
-      toast.error(result.error || 'Failed to approve');
+      toast.error(result.error || 'Gagal menyetujui permohonan');
     }
   };
 
   const handleReject = async (id: string) => {
     const result = await rejectLeave(id);
     if (result.success) {
-      toast.success('Leave request rejected');
+      toast.success('Permohonan cuti ditolak');
     } else {
-      toast.error(result.error || 'Failed to reject');
+      toast.error(result.error || 'Gagal menolak permohonan');
     }
   };
 
   const handleCreate = async () => {
     if (!formData.start_date || !formData.end_date) {
-      toast.error('Please fill start and end date');
+      toast.error('Harap isi tanggal mulai dan selesai');
       return;
     }
     const result = await createLeave({
@@ -79,19 +79,27 @@ export default function LeaveRequestsPage() {
       reason: formData.reason,
     });
     if (result.success) {
-      toast.success('Leave request submitted');
+      toast.success('Permohonan cuti berhasil diajukan');
       setShowCreate(false);
       setFormData({ type: 'annual', start_date: '', end_date: '', reason: '' });
     } else {
-      toast.error(result.error || 'Failed to submit');
+      toast.error(result.error || 'Gagal mengajukan permohonan');
     }
   };
 
-  const getStatusBadge = (status: LeaveRequest['status']) => (
-    <Badge variant={status === 'approved' ? 'success' : status === 'rejected' ? 'danger' : status === 'cancelled' ? 'default' : 'warning'}>
-      {status === 'cancelled' ? 'Cancelled' : status.charAt(0).toUpperCase() + status.slice(1)}
-    </Badge>
-  );
+  const getStatusBadge = (status: LeaveRequest['status']) => {
+    const statusMap: Record<string, string> = {
+      pending: 'Menunggu',
+      approved: 'Disetujui',
+      rejected: 'Ditolak',
+      cancelled: 'Dibatalkan',
+    };
+    return (
+      <Badge variant={status === 'approved' ? 'success' : status === 'rejected' ? 'danger' : status === 'cancelled' ? 'default' : 'warning'}>
+        {statusMap[status] || status}
+      </Badge>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -99,23 +107,23 @@ export default function LeaveRequestsPage() {
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
         <Button onClick={() => setShowCreate(true)}>
-          <Plus className="w-4 h-4" /> New Request
+          <Plus className="w-4 h-4" /> Pengajuan Baru
         </Button>
       </div>
 
       {/* Request Cards */}
       {getFiltered().length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border">
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
           <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">No leave requests</p>
+          <p className="text-gray-900 font-medium">Tidak ada pengajuan cuti</p>
           <p className="text-sm text-gray-500 mt-1">
-            {activeTab === 'pending' ? 'No pending requests to review' : `No ${activeTab} requests`}
+            {activeTab === 'pending' ? 'Tidak ada permohonan yang menunggu ditinjau' : `Tidak ada permohonan ${activeTab}`}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {getFiltered().map((req) => (
-            <div key={req.id} className="bg-white rounded-xl shadow-sm border p-5">
+            <div key={req.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   {/* Header */}
@@ -135,28 +143,28 @@ export default function LeaveRequestsPage() {
                   {/* Details */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div>
-                      <p className="text-gray-500 text-xs">Type</p>
-                      <p className="font-medium">{leaveTypeLabels[req.type]}</p>
+                      <p className="text-gray-500 text-xs">Jenis Cuti</p>
+                      <p className="font-medium text-black">{leaveTypeLabels[req.type]}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-xs">From</p>
-                      <p className="font-medium">{new Date(req.start_date).toLocaleDateString('id-ID')}</p>
+                      <p className="text-gray-500 text-xs">Mulai</p>
+                      <p className="font-medium text-black">{new Date(req.start_date).toLocaleDateString('id-ID')}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-xs">To</p>
-                      <p className="font-medium">{new Date(req.end_date).toLocaleDateString('id-ID')}</p>
+                      <p className="text-gray-500 text-xs">Sampai</p>
+                      <p className="font-medium text-black">{new Date(req.end_date).toLocaleDateString('id-ID')}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-xs">Days</p>
-                      <p className="font-medium">
-                        {Math.ceil((new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / 86400000) + 1}
+                      <p className="text-gray-500 text-xs">Durasi</p>
+                      <p className="font-medium text-black">
+                        {Math.ceil((new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / 86400000) + 1} Hari
                       </p>
                     </div>
                   </div>
 
                   {req.reason && (
-                    <p className="mt-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                      <span className="font-medium text-gray-700">Reason:</span> {req.reason}
+                    <p className="mt-3 text-sm text-black bg-gray-50 p-3 rounded-lg border border-gray-200">
+                      <span className="font-bold text-black">Alasan:</span> {req.reason}
                     </p>
                   )}
                 </div>
@@ -165,10 +173,10 @@ export default function LeaveRequestsPage() {
                 {req.status === 'pending' && (
                   <div className="flex flex-col gap-2 shrink-0">
                     <Button size="sm" onClick={() => handleApprove(req.id)}>
-                      <CheckCircle className="w-4 h-4" /> Approve
+                      <CheckCircle className="w-4 h-4" /> Setujui
                     </Button>
                     <Button size="sm" variant="danger" onClick={() => handleReject(req.id)}>
-                      <XCircle className="w-4 h-4" /> Reject
+                      <XCircle className="w-4 h-4" /> Tolak
                     </Button>
                   </div>
                 )}
@@ -179,24 +187,24 @@ export default function LeaveRequestsPage() {
       )}
 
       {/* Create Modal */}
-      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Submit Leave Request" size="md">
+      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Ajukan Permohonan Cuti" size="md">
         <div className="space-y-4">
           <FormSelect
-            label="Leave Type"
+            label="Jenis Cuti"
             value={formData.type}
             onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })}
             options={Object.entries(leaveTypeLabels).map(([value, label]) => ({ value, label }))}
           />
           <div className="grid grid-cols-2 gap-4">
             <FormInput
-              label="Start Date"
+              label="Tanggal Mulai"
               type="date"
               value={formData.start_date}
               onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
               required
             />
             <FormInput
-              label="End Date"
+              label="Tanggal Selesai"
               type="date"
               value={formData.end_date}
               onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
@@ -204,18 +212,18 @@ export default function LeaveRequestsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+            <label className="block text-sm font-medium text-black mb-1">Alasan Cuti</label>
             <textarea
               value={formData.reason}
               onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-              placeholder="Reason for leave..."
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Alasan mengajukan cuti..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={3}
             />
           </div>
           <div className="flex gap-2 pt-2">
-            <Button onClick={handleCreate} className="flex-1">Submit Request</Button>
-            <Button variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button onClick={handleCreate} className="flex-1">Kirim Pengajuan</Button>
+            <Button variant="secondary" onClick={() => setShowCreate(false)}>Batal</Button>
           </div>
         </div>
       </Modal>
