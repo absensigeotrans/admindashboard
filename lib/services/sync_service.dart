@@ -162,6 +162,47 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  /// Simpan check-out offline untuk absensi yang check-in-nya sudah sinkron (online)
+  Future<bool> saveCheckoutOffline({
+    required String userId,
+    required String checkInTime,
+    required double checkInLatitude,
+    required double checkInLongitude,
+    required DateTime checkOutTime,
+    required double checkOutLatitude,
+    required double checkOutLongitude,
+    String? workStatus,
+  }) async {
+    try {
+      await _db.insertPendingAttendance({
+        'user_id': userId,
+        'check_in_time': checkInTime,
+        'check_in_latitude': checkInLatitude,
+        'check_in_longitude': checkInLongitude,
+        'check_out_time': checkOutTime.toIso8601String(),
+        'check_out_latitude': checkOutLatitude,
+        'check_out_longitude': checkOutLongitude,
+        'sync_status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+        'work_status': workStatus,
+      });
+
+      await _updatePendingCount();
+
+      // Tampilkan notifikasi offline
+      NotificationService().showAttendanceSavedOffline();
+
+      if (_isOnline && _autoSyncEnabled) {
+        _syncPendingData();
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('[SyncService] Error saving offline checkout: $e');
+      return false;
+    }
+  }
+
   /// Sinkronisasi semua data pending ke Supabase
   Future<bool> _syncPendingData() async {
     if (_isSyncing) return false;
@@ -195,7 +236,7 @@ class SyncService extends ChangeNotifier {
         // Skip records with invalid (0,0) coordinates
         final lat = item['check_in_latitude'] as num? ?? 0;
         final lng = item['check_in_longitude'] as num? ?? 0;
-        if (lat == 0 && lng == 0) {
+        if (lat == 0 && lng == 0 && checkOutTime == null) {
           debugPrint('[SyncService] Skipping record $id: invalid coordinates (0,0)');
           await _db.markAttendanceFailed(id, 'Invalid coordinates (0,0)');
           continue;
@@ -348,7 +389,10 @@ class SyncService extends ChangeNotifier {
 
    /// Get local attendance for today (combined: synced + pending)
    Future<List<Map<String, dynamic>>> getTodayAttendance(String userId) async {
-     final today = DateTime.now().toIso8601String().substring(0, 10);
+     final now = DateTime.now();
+     final startOfToday = DateTime(now.year, now.month, now.day, 0, 0, 0);
+     final startUtc = startOfToday.toUtc().toIso8601String();
+     final today = now.toIso8601String().substring(0, 10);
      final results = <Map<String, dynamic>>[];
 
      try {
@@ -357,7 +401,7 @@ class SyncService extends ChangeNotifier {
            .from('attendance')
            .select('id, user_id, check_in_time, check_in_latitude, check_in_longitude, check_out_time, check_out_latitude, check_out_longitude, is_mocked, distance_from_office, photo_url, work_status')
            .eq('user_id', userId)
-           .gte('check_in_time', today)
+           .gte('check_in_time', startUtc)
            .maybeSingle();
 
        if (synced != null) results.add(synced);

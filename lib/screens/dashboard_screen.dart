@@ -324,15 +324,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+    final startUtc = startOfToday.toUtc().toIso8601String();
+    final endUtc = endOfToday.toUtc().toIso8601String();
 
     try {
       final results = await supabase
           .from('attendance')
           .select()
           .eq('user_id', user.id)
-          .gte('check_in_time', '$today 00:00:00')
-          .lte('check_in_time', '$today 23:59:59')
+          .gte('check_in_time', startUtc)
+          .lte('check_in_time', endUtc)
           .order('check_in_time', ascending: false)
           .limit(1);
 
@@ -515,6 +519,25 @@ try {
           checkOutLatitude: currentCoords?.latitude ?? 0,
           checkOutLongitude: currentCoords?.longitude ?? 0,
         );
+      } else {
+        await syncService.saveCheckoutOffline(
+          userId: user.id,
+          checkInTime: _todayAttendance!['check_in_time'],
+          checkInLatitude: (_todayAttendance!['check_in_latitude'] as num?)?.toDouble() ?? 0.0,
+          checkInLongitude: (_todayAttendance!['check_in_longitude'] as num?)?.toDouble() ?? 0.0,
+          checkOutTime: now,
+          checkOutLatitude: currentCoords?.latitude ?? 0,
+          checkOutLongitude: currentCoords?.longitude ?? 0,
+          workStatus: _todayAttendance!['work_status'],
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Check-out tersimpan lokal (offline), menunggu sinkronisasi...'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
     }
     if (mounted) {
@@ -571,7 +594,7 @@ try {
           'check_in_time': now.toUtc().toIso8601String(),
           'check_in_latitude': currentCoords?.latitude,
           'check_in_longitude': currentCoords?.longitude,
-          'check_in_accuracy': currentCoords.accuracy,
+          'check_in_accuracy': currentCoords?.accuracy,
           'check_in_location_data': locationService.buildLocationData(),
           'is_mocked': locationService.isMocked,
           'distance_from_office': locationService.currentDistance,
